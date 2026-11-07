@@ -21,7 +21,12 @@ export function Hero() {
         </p>
         <Brand className="mx-auto mt-7 w-40 sm:w-46" />
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <AuthAction action="signUp">Get Started <span aria-hidden="true">↗</span></AuthAction>
+          <AuthAction action="signUp">
+            Get Started
+            <svg aria-hidden="true" className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 12 12 4M6 4h6v6" />
+            </svg>
+          </AuthAction>
           <Button asChild variant="outline"><a href="#features">Explore Features <span aria-hidden="true">↓</span></a></Button>
         </div>
       </div>
