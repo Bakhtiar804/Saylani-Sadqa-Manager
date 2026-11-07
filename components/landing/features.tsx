@@ -3,54 +3,62 @@ import { Card } from "@/components/ui/card";
 const features = [
   {
     title: "Box & Location Management",
-    description: "Register boxes with unique IDs and track their locations, custodians, and status.",
-    icon: "M3 7l9-4 9 4-9 4-9-4Zm0 0v10l9 4 9-4V7m-9 4v10M8 5l9 4",
+    caption: "Find each box and its custodian.",
+    outline: "m5 23 11-5 11 5-11 5-11-5v12l11 5 11-5V23M16 28v12",
+    detail: "M35 28s-8-7-8-13a8 8 0 1 1 16 0c0 6-8 13-8 13Zm0-13h.1",
   },
   {
     title: "Collection Tracking",
-    description: "Link each collection to a box and keep a searchable record of amounts, dates, and verification.",
-    icon: "M5 3h14v18l-3-2-4 2-4-2-3 2V3Zm4 5h6m-6 4h6m-6 4h3",
+    caption: "See each pickup, amount, and date.",
+    outline: "M9 7h24v30l-4-3-4 3-4-3-4 3-4-3-4 3zm6 8h12m-12 6h10m-10 6h5",
+    detail: "M25 33a9 9 0 1 0 18 0 9 9 0 0 0-18 0Zm9-5v5l3 2",
   },
   {
     title: "Rider Tasks",
-    description: "Assign boxes and routes to riders and follow collection tasks through completion.",
-    icon: "M7 4h10a2 2 0 0 1 2 2v14H5V6a2 2 0 0 1 2-2Zm2-1h6v4H9V3Zm0 11 2 2 4-4",
+    caption: "Assign routes and track completed stops.",
+    outline: "M8 33c0-9 11-3 11-12s11-4 11-11M5 33a3 3 0 1 0 6 0 3 3 0 0 0-6 0Zm22-23a3 3 0 1 0 6 0 3 3 0 0 0-6 0Z",
+    detail: "M24 28h18v14H24zm4 7 3 3 6-6",
   },
   {
     title: "Partner Management",
-    description: "Keep external organization details and agreements together, and track boxes and collections by partner.",
-    icon: "M3 21h18M5 21V8h7v13m0-16 7-2v18M8 11v1m0 3v1m7-8v1m0 3v1m0 3v1",
+    caption: "Track boxes and collections by partner.",
+    outline: "M4 37h40M7 37V18l12-5v24m10 0V8h12v29M11 23h4m-4 6h4m18-14h4m-4 6h4m-4 6h4",
+    detail: "M19 30h10m-7-3-3 3 3 3m4-6 3 3-3 3",
   },
   {
     title: "Analytics & Reports",
-    description: "Compare collections by city, box, rider, or partner across daily, weekly, and monthly reports.",
-    icon: "M3 3v18h18M8 16v-4m5 4V9m5 7V5",
+    caption: "Compare donations across cities and periods.",
+    outline: "M5 10h38v27H5zm0 7h38m-29 15v-6m10 6V23m10 9V20",
+    detail: "M10 14h.1m4 0h.1m6 24v4m8-4v4m-12 0h16",
   },
   {
     title: "Audit & Accountability",
-    description: "Review activity logs, box status changes, and security incidents with role-based access.",
-    icon: "M12 22s7-3 7-10V5l-7-3-7 3v7c0 7 7 10 7 10Zm-3-10 2 2 4-4",
+    caption: "Review who verified or changed a record.",
+    outline: "M24 6l15 6v10c0 9-6 16-15 20-9-4-15-11-15-20V12z",
+    detail: "m17 24 5 5 9-10",
   },
 ];
 
 export function Features() {
   return (
-    <section id="features" aria-labelledby="features-title" className="mx-auto max-w-7xl scroll-mt-6 px-5 py-16 sm:px-8 sm:py-22">
-      <div className="mx-auto max-w-xl text-center">
+    <section id="features" aria-labelledby="features-title" className="mx-auto max-w-7xl scroll-mt-6 px-5 py-10 sm:px-8 lg:py-12">
+      <header className="text-center">
         <p className="text-xs font-bold tracking-[0.18em] text-primary uppercase">Platform capabilities</p>
-        <h2 id="features-title" className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Manage the full collection cycle</h2>
-        <p className="mt-4 text-muted-foreground">From registering a Sadqa box to reviewing what it collects, see what the platform is designed to support.</p>
-      </div>
-      <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {features.map(({ title, description, icon }) => (
-          <Card key={title} className="group p-6">
-            <div className="mb-5 grid size-12 place-items-center rounded-xl bg-primary/8 text-primary group-even:bg-accent/20">
-              <svg aria-hidden="true" viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">
-                <path d={icon} />
+        <h2 id="features-title" className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Manage the full collection cycle</h2>
+      </header>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {features.map(({ title, caption, outline, detail }) => (
+          <Card key={title} className="grid grid-cols-[4.25rem_minmax(0,1fr)] items-center gap-3 p-3 sm:gap-4 sm:p-4">
+            <div className="grid size-17 place-items-center rounded-xl bg-surface">
+              <svg aria-hidden="true" className="size-12" viewBox="0 0 48 48" fill="none" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d={outline} stroke="var(--primary)" />
+                <path d={detail} stroke="var(--brand-blue)" />
               </svg>
             </div>
-            <h3 className="text-lg font-bold tracking-tight">{title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
+            <div>
+              <h3 className="font-bold leading-snug tracking-tight">{title}</h3>
+              <p className="mt-1 text-sm leading-snug text-muted-foreground">{caption}</p>
+            </div>
           </Card>
         ))}
       </div>

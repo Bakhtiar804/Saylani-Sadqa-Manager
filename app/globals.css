@@ -22,3 +22,35 @@
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }
 }
+
+.landing-workflow {
+  padding-block: clamp(2.75rem, 5vw, 4.5rem);
+}
+
+.landing-workflow-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: clamp(1.25rem, 2.5vw, 2rem);
+}
+
+.landing-workflow-item {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  justify-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  padding: clamp(0.6rem, 2vw, 1.5rem);
+}
+
+.landing-workflow-item + .landing-workflow-item {
+  border-left: 1px solid var(--border);
+}
+
+.landing-workflow-arrow {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 0;
+  transform: translate(50%, -50%);
+}

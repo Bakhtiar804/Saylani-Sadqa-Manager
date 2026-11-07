@@ -14,8 +14,8 @@ export default function Home() {
       <main>
         <Hero />
         <StatsStrip />
-        <Features />
         <Workflow />
+        <Features />
         <ReportingGuide />
         <AnalyticsPreview />
       </main>

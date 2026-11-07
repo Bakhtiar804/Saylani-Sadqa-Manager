@@ -6,8 +6,8 @@ import { HeroArt } from "./hero-art";
 export function Hero() {
   return (
     <section aria-labelledby="landing-title" className="relative isolate overflow-hidden bg-surface">
-      <div className="relative mx-auto max-w-7xl px-5 py-17 text-center sm:px-8 sm:py-21 lg:py-24">
-        <HeroArt />
+      <HeroArt />
+      <div className="relative mx-auto max-w-7xl px-5 pt-10 pb-27 text-center sm:px-8 sm:pt-13 sm:pb-35 xl:pt-15 xl:pb-22">
         <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-1.5 text-[0.65rem] font-bold tracking-[0.18em] text-primary uppercase">
           <span aria-hidden="true" className="size-1.5 rounded-full bg-accent" />
           Saylani Sadqa Operations
