@@ -2,11 +2,11 @@ const backgrounds = ["#e7f1df", "#e6eefb", "#f8eddc", "#f1e9f8", "#e0f1ee"];
 const shirts = ["#276431", "#1d65d5", "#b36a2e", "#7750a3", "#347b75"];
 const hairColors = ["#26362b", "#3e302c", "#493a2d", "#292b35"];
 
-function hash(value) {
+function hash(value: string): number {
   return [...value].reduce((total, character) => total + character.charCodeAt(0), 0);
 }
 
-export default function PartnerAvatar({ name, size = 52 }) {
+export default function PartnerAvatar({ name, size = 52 }: { name: string; size?: number }) {
   const seed = hash(name);
   const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const background = backgrounds[seed % backgrounds.length];

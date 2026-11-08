@@ -1,0 +1,24 @@
+import type { ReactNode } from "react";
+import AdminShell from "@/components/dashboard/admin-shell";
+import { verifyAdminSession, SESSION_COOKIE_NAME } from "@/lib/session";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { connection } from "next/server";
+
+export const metadata = {
+  title: "Super Admin Dashboard | Saylani Sadqa Manager",
+  description: "Sadqa box collections and operations demo dashboard.",
+};
+
+export const instant = false;
+
+export default async function DashboardLayout({ children }: { children: ReactNode }) {
+  await connection();
+  const cookieStore = await cookies();
+  const session = verifyAdminSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  if (!session) {
+    redirect("/sign-in");
+  }
+
+  return <AdminShell canManageAdmins={session.role === "super_admin"}>{children}</AdminShell>;
+}

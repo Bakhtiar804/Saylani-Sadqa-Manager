@@ -1,9 +1,9 @@
-import { cities } from "./cities.js";
-import { collections } from "./collections.js";
-import { donationBoxes } from "./donationBoxes.js";
-import { riders } from "./riders.js";
+import { cities } from "./cities";
+import { collections } from "./collections";
+import { donationBoxes } from "./donationBoxes";
+import { riders } from "./riders";
 
-const cityAreas = {
+const cityAreas: Record<string, string[]> = {
   C001: ["Saddar", "Gulshan", "Korangi", "North Nazimabad"],
   C002: ["Madina Town", "D Ground", "People's Colony"],
   C003: ["Gulberg", "Model Town", "Johar Town"],

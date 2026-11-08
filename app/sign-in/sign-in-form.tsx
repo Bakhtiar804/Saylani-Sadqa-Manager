@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 type Field = "email" | "password";
@@ -9,12 +10,14 @@ type Errors = Partial<Record<Field, string>>;
 const inputClassName = "h-11 w-full rounded-xl border border-border bg-card px-3 text-base text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-invalid:border-foreground";
 
 export function SignInForm() {
+  const router = useRouter();
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const errorFocusRef = useRef<HTMLInputElement | null>(null);
   const [errors, setErrors] = useState<Errors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     errorFocusRef.current?.focus();
@@ -27,11 +30,11 @@ export function SignInForm() {
     setErrors((current) => current[field] ? { ...current, [field]: undefined } : current);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const email = emailRef.current;
     const password = passwordRef.current;
-    if (!email || !password) return;
+    if (!email || !password || isSubmitting) return;
 
     const nextErrors: Errors = {};
     if (!email.value.trim()) nextErrors.email = "Enter your email.";
@@ -43,14 +46,37 @@ export function SignInForm() {
     setStatus("");
     if (nextErrors.email || nextErrors.password) return;
 
-    // Connect authentication here once user accounts are available.
-    event.currentTarget.reset();
-    setShowPassword(false);
-    setStatus("Sign-in will be available once authentication is connected.");
+    setIsSubmitting(true);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.value.trim(),
+          password: password.value,
+        }),
+      });
+
+      const result: { error?: unknown } = await response.json();
+      if (!response.ok) {
+        setStatus(
+          typeof result.error === "string"
+            ? result.error
+            : "Unable to sign in. Please try again.",
+        );
+        return;
+      }
+
+      router.replace("/dashboard");
+    } catch {
+      setStatus("Unable to reach the sign-in service. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
-    <form method="post" noValidate onSubmit={handleSubmit} className="mt-7 grid items-start gap-5 sm:grid-cols-2">
+    <form noValidate onSubmit={handleSubmit} className="mt-7 grid items-start gap-5 sm:grid-cols-2">
       <div className="grid gap-2">
         <label htmlFor="sign-in-email" className="text-sm font-semibold">Email</label>
         <input
@@ -105,8 +131,10 @@ export function SignInForm() {
         </div>
         {errors.password && <p id="sign-in-password-error" className="text-sm font-medium">{errors.password}</p>}
       </div>
-      <Button type="submit" className="w-full sm:col-span-2">Sign In</Button>
-      <p role="status" className={status ? "rounded-xl bg-surface p-3 text-sm text-primary sm:col-span-2" : "sr-only"}>{status}</p>
+      <Button type="submit" disabled={isSubmitting} className="w-full sm:col-span-2">
+        {isSubmitting ? "Signing in..." : "Sign In"}
+      </Button>
+      <p role="status" aria-live="polite" className={status ? "rounded-xl bg-surface p-3 text-sm text-primary sm:col-span-2" : "sr-only"}>{status}</p>
     </form>
   );
 }

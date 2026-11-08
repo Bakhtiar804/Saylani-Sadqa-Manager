@@ -1,4 +1,13 @@
-export const dashboardModules = [
+import type { IconName } from "./icons";
+
+type DashboardModule = {
+  href: string;
+  label: string;
+  mobileLabel: string;
+  icon: IconName;
+};
+
+export const dashboardModules: DashboardModule[] = [
   { href: "/dashboard", label: "Overview", mobileLabel: "Overview", icon: "grid" },
   { href: "/dashboard/leaderboard", label: "Leaderboard", mobileLabel: "Leaderboard", icon: "leaderboard" },
   { href: "/dashboard/collections", label: "Collections", mobileLabel: "Collections", icon: "wallet" },

@@ -1,39 +1,54 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
+import type { CityOption, DataRecord, RecordColumn, RecordValue } from "@/lib/dashboard-types";
 
-function prettyLabel(value) {
+function prettyLabel(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function displayValue(value, key, cityById) {
+function displayValue(value: RecordValue, key: string, cityById: Map<string, string>): string {
   if (value === null || value === undefined || value === "") return "—";
-  if (key === "city_id") return cityById.get(value) || value;
+  if (key === "city_id") return cityById.get(String(value)) || String(value);
   if (key.endsWith("_pkr")) return `Rs ${Number(value).toLocaleString("en-PK")}`;
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
 }
 
-export default function RecordExplorer({ title, description, records, columns, statusKey = "", cityKey = "city_id", dateKey = "", cities = [], initialSortDirection = "desc" }) {
+type RecordExplorerProps = {
+  title: string;
+  description: string;
+  records: DataRecord[];
+  columns: RecordColumn[];
+  statusKey?: string;
+  cityKey?: string;
+  dateKey?: string;
+  cities?: CityOption[];
+  initialSortDirection?: "asc" | "desc";
+};
+
+export default function RecordExplorer({ title, description, records, columns, statusKey = "", cityKey = "city_id", dateKey = "", cities = [], initialSortDirection = "desc" }: RecordExplorerProps) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [city, setCity] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [sort, setSort] = useState({ key: dateKey || columns[0]?.key || "", direction: initialSortDirection });
+  const [sort, setSort] = useState<{ key: string; direction: "asc" | "desc" }>({ key: dateKey || columns[0]?.key || "", direction: initialSortDirection });
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState("");
   const pageSize = 10;
-  const cityById = useMemo(() => new Map(cities.map((item) => [item.city_id, item.city_name])), [cities]);
-  const statuses = useMemo(() => statusKey ? [...new Set(records.map((item) => item[statusKey]).filter(Boolean))].sort() : [], [records, statusKey]);
+  const cityById = useMemo(() => new Map<string, string>(cities.map((item) => [item.city_id, item.city_name])), [cities]);
+  const statuses = useMemo(() => statusKey ? [...new Set(records.map((item) => String(item[statusKey] ?? "")).filter(Boolean))].sort() : [], [records, statusKey]);
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return records.filter((record) => {
       const matchesQuery = !needle || Object.entries(record).some(([key, value]) => key !== "is_demo_record" && String(value ?? "").toLowerCase().includes(needle));
       const matchesStatus = status === "all" || String(record[statusKey]) === status;
       const matchesCity = city === "all" || String(record[cityKey]) === city;
-      const matchesFrom = !from || !record[dateKey] || record[dateKey] >= from;
-      const matchesTo = !to || !record[dateKey] || record[dateKey] <= to;
+      const recordDate = String(record[dateKey] ?? "");
+      const matchesFrom = !from || !recordDate || recordDate >= from;
+      const matchesTo = !to || !recordDate || recordDate <= to;
       return matchesQuery && matchesStatus && matchesCity && matchesFrom && matchesTo;
     }).sort((a, b) => {
       if (!sort.key) return 0;
@@ -46,9 +61,9 @@ export default function RecordExplorer({ title, description, records, columns, s
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const resetPage = (setter) => (value) => { setter(value); setPage(1); };
+  const resetPage = (setter: Dispatch<SetStateAction<string>>) => (value: string) => { setter(value); setPage(1); };
 
-  function toggleSort(key) {
+  function toggleSort(key: string) {
     setSort((previous) => ({ key, direction: previous.key === key && previous.direction === "asc" ? "desc" : "asc" }));
   }
 
@@ -68,7 +83,15 @@ export default function RecordExplorer({ title, description, records, columns, s
   </section>;
 }
 
-function FragmentRow({ record, isOpen, columns, onToggle, cityById }) {
+type FragmentRowProps = {
+  record: DataRecord;
+  isOpen: boolean;
+  columns: RecordColumn[];
+  onToggle: () => void;
+  cityById: Map<string, string>;
+};
+
+function FragmentRow({ record, isOpen, columns, onToggle, cityById }: FragmentRowProps) {
   return <>
     <tr className="border-b border-[#edf1eb] align-middle text-[13px] text-[#405345] transition hover:bg-[#fbfdf9]">{columns.map((column) => <td key={column.key} className="max-w-[260px] px-4 py-3.5"><span className="block overflow-hidden text-ellipsis whitespace-nowrap" title={String(record[column.key] ?? "—")}>{displayValue(record[column.key], column.key, cityById)}</span></td>)}<td className="px-4 py-3.5"><button aria-expanded={isOpen} onClick={onToggle} className="rounded-lg border border-[#dce8dc] px-3 py-2 text-xs font-semibold text-[#276431] transition hover:bg-[#edf6e9] focus-visible:outline-2 focus-visible:outline-[#61bb46]">{isOpen ? "Hide" : "Details"}</button></td></tr>
     {isOpen && <tr className="border-b border-[#edf1eb] bg-[#f8fbf6]"><td colSpan={columns.length + 1} className="px-5 py-4"><div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">{Object.entries(record).filter(([key]) => !/password/i.test(key)).map(([key, value]) => <div key={key} className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wide text-[#718073]">{prettyLabel(key)}</p><p className="mt-1 break-words text-[13px] text-[#344639]">{displayValue(value, key, cityById)}</p></div>)}</div></td></tr>}

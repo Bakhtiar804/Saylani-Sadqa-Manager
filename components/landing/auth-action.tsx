@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 const authRoutes: Record<"signIn" | "signUp", string | null> = {
-  signIn: "/login",
+  signIn: "/sign-in",
   signUp: null,
 };
 

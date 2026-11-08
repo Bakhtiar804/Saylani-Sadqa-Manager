@@ -13,6 +13,7 @@ import {
   securityIncidents,
   users,
 } from "@/data/index";
+import type { CityOption } from "@/lib/dashboard-types";
 
 const cityById = new Map(cities.map((city) => [city.city_id, city.city_name]));
 const boxById = new Map(donationBoxes.map((box) => [box.box_id, box]));
@@ -24,15 +25,18 @@ const minCollectionDate = collections
   .map((record) => record.collection_date)
   .sort()[0];
 
-export function formatPKR(value) {
+export function formatPKR(value: number | null | undefined): string {
   return `Rs ${Math.round(value || 0).toLocaleString("en-PK")}`;
 }
 
-export function getCityName(cityId) {
+export function getCityName(cityId: string): string {
   return cityById.get(cityId) || "Unassigned";
 }
 
-export function getRangeBounds(range = "30") {
+export function getRangeBounds(range = "30"): { startDate: string; endDate: string } {
+  if (!maxCollectionDate || !minCollectionDate) {
+    throw new Error("Collection date data is required to build dashboard ranges.");
+  }
   const selectedRange = ["7", "30", "90", "all"].includes(String(range))
     ? String(range)
     : "30";
@@ -49,7 +53,9 @@ export function getRangeBounds(range = "30") {
   };
 }
 
-export function getOverviewData({ range = "30", city = "all" } = {}) {
+export function getOverviewData(
+  { range = "30", city = "all" }: { range?: string; city?: string } = {},
+) {
   range = ["7", "30", "90", "all"].includes(String(range))
     ? String(range)
     : "30";
@@ -206,7 +212,7 @@ export function getOverviewData({ range = "30", city = "all" } = {}) {
   };
 }
 
-export function getCityOptions() {
+export function getCityOptions(): CityOption[] {
   return cities;
 }
 

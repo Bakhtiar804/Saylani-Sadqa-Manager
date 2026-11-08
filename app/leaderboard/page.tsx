@@ -3,6 +3,13 @@ import PartnerAvatar from "@/components/dashboard/partner-avatar";
 import { formatPKR } from "@/lib/dashboard-data";
 import { getPublicPartnerLeaderboard } from "@/lib/partner-leaderboard";
 
+type PublicPartner = {
+  rank: number;
+  partnerName: string;
+  installedBoxes: number;
+  verifiedFunds: number;
+};
+
 export const metadata = {
   title: "Partner Leaderboard | Saylani Sadqa Manager",
   description:
@@ -27,7 +34,7 @@ const podiumStyles = [
   },
 ];
 
-function PublicPartnerStats({ partner }) {
+function PublicPartnerStats({ partner }: { partner: PublicPartner }) {
   return (
     <div className="mt-5 grid grid-cols-2 gap-3 border-t border-black/5 pt-4">
       <div>
@@ -50,7 +57,7 @@ function PublicPartnerStats({ partner }) {
   );
 }
 
-function PublicPartnerCard({ partner, index }) {
+function PublicPartnerCard({ partner, index }: { partner: PublicPartner; index: number }) {
   const style = podiumStyles[index];
 
   return (
@@ -79,7 +86,7 @@ function PublicPartnerCard({ partner, index }) {
   );
 }
 
-function PublicPartnerRow({ partner }) {
+function PublicPartnerRow({ partner }: { partner: PublicPartner }) {
   return (
     <article className="grid grid-cols-[42px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 rounded-xl border border-[#e5ece2] bg-white p-3.5 transition hover:border-[#c8ddc3] hover:bg-[#fbfdf9] sm:grid-cols-[48px_minmax(220px,1fr)_150px_190px] sm:gap-4 sm:px-5">
       <span className="grid size-9 place-items-center rounded-full bg-[#f0f5ee] text-sm font-bold text-[#526552]">
@@ -109,7 +116,7 @@ function PublicPartnerRow({ partner }) {
 }
 
 export default function PublicLeaderboardPage() {
-  const rankings = getPublicPartnerLeaderboard();
+  const rankings: PublicPartner[] = getPublicPartnerLeaderboard();
   const topThree = rankings.slice(0, 3);
   const remainingPartners = rankings.slice(3);
 

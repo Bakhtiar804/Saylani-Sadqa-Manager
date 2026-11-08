@@ -1,15 +1,24 @@
 import { cities, collections, donationBoxes, partners } from "@/data/index";
+import type { DataRecord } from "./dashboard-types";
 
-const collectionStatuses = ["Verified", "Pending Verification", "Flagged"];
-const boxStatuses = ["Active", "Inactive", "Damaged", "Under Review"];
+const collectionStatuses = ["Verified", "Pending Verification", "Flagged"] as const;
+const boxStatuses = ["Active", "Inactive", "Damaged", "Under Review"] as const;
+type CollectionStatus = (typeof collectionStatuses)[number];
+type BoxStatus = (typeof boxStatuses)[number];
 
-function total(records, predicate = () => true) {
+function total<T extends DataRecord>(
+  records: readonly T[],
+  predicate: (record: T) => boolean = () => true,
+): number {
   return records
     .filter(predicate)
     .reduce((amount, record) => amount + Number(record.collection_amount_pkr || 0), 0);
 }
 
-function count(records, predicate = () => true) {
+function count<T>(
+  records: readonly T[],
+  predicate: (record: T) => boolean = () => true,
+): number {
   return records.filter(predicate).length;
 }
 
@@ -28,19 +37,19 @@ export function getPartnerLeaderboardData() {
           status,
           total(partnerCollections, (record) => record.collection_status === status),
         ]),
-      );
+      ) as Record<CollectionStatus, number>;
       const statusCounts = Object.fromEntries(
         collectionStatuses.map((status) => [
           status,
           count(partnerCollections, (record) => record.collection_status === status),
         ]),
-      );
+      ) as Record<CollectionStatus, number>;
       const boxCounts = Object.fromEntries(
         boxStatuses.map((status) => [
           status,
           count(partnerBoxes, (box) => box.box_status === status),
         ]),
-      );
+      ) as Record<BoxStatus, number>;
 
       return {
         partner_id: partner.partner_id,
@@ -85,7 +94,7 @@ export function getPartnerLeaderboardData() {
         amount: total(partnerCollections, (record) => record.collection_status === status),
       },
     ]),
-  );
+  ) as Record<CollectionStatus, { count: number; amount: number }>;
 
   const verifiedByCity = cities
     .map((city) => ({
@@ -123,7 +132,12 @@ export function getPartnerLeaderboardData() {
 }
 
 export function getPublicPartnerLeaderboard() {
-  return getPartnerLeaderboardData().partners.map((partner) => ({
+  return getPartnerLeaderboardData().partners.map((partner: {
+    rank: number;
+    partner_name: string;
+    installed_boxes: number;
+    verified_amount_pkr: number;
+  }) => ({
     rank: partner.rank,
     partnerName: partner.partner_name,
     installedBoxes: partner.installed_boxes,

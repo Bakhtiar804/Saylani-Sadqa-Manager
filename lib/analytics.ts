@@ -1,3 +1,5 @@
+import type { DataRecord } from "./dashboard-types";
+
 const colors = [
   "#276431",
   "#61bb46",
@@ -8,15 +10,24 @@ const colors = [
   "#86a889",
 ];
 
-export const sum = (records, key, predicate = () => true) =>
-  records
+export function sum<T extends DataRecord>(
+  records: readonly T[],
+  key: keyof T & string,
+  predicate: (record: T) => boolean = () => true,
+): number {
+  return records
     .filter(predicate)
     .reduce((total, item) => total + (Number(item[key]) || 0), 0);
+}
 
-export function countBy(records, key, order) {
-  const counts = new Map();
+export function countBy<T extends DataRecord>(
+  records: readonly T[],
+  key: keyof T & string,
+  order?: readonly string[],
+) {
+  const counts = new Map<string, number>();
   records.forEach((record) => {
-    const label = record[key] || "Unspecified";
+    const label = String(record[key] || "Unspecified");
     counts.set(label, (counts.get(label) || 0) + 1);
   });
   const entries = [...counts.entries()].map(([name, value]) => ({
@@ -33,12 +44,17 @@ export function countBy(records, key, order) {
   }));
 }
 
-export function sumBy(records, groupKey, valueKey, labelMap = {}) {
-  const totals = new Map();
+export function sumBy<T extends DataRecord>(
+  records: readonly T[],
+  groupKey: keyof T & string,
+  valueKey: keyof T & string,
+  labelMap: Record<string, string> = {},
+) {
+  const totals = new Map<string, number>();
   records.forEach((record) => {
-    const id = record[groupKey] || "unassigned";
-    const name =
-      labelMap[id] || record[`${groupKey.replace(/_id$/, "")}_name`] || id;
+    const id = String(record[groupKey] || "unassigned");
+    const relatedNameKey = `${groupKey.replace(/_id$/, "")}_name`;
+    const name = labelMap[id] || String(record[relatedNameKey] || id);
     totals.set(name, (totals.get(name) || 0) + (Number(record[valueKey]) || 0));
   });
   return [...totals.entries()]
@@ -50,11 +66,11 @@ export function sumBy(records, groupKey, valueKey, labelMap = {}) {
     .sort((a, b) => b.value - a.value);
 }
 
-export function monthlySum(
-  records,
-  dateKey,
-  amountKey,
-  predicate = () => true,
+export function monthlySum<T extends DataRecord>(
+  records: readonly T[],
+  dateKey: keyof T & string,
+  amountKey: keyof T & string,
+  predicate: (record: T) => boolean = () => true,
 ) {
   const months = new Map();
   records.filter(predicate).forEach((record) => {
@@ -79,6 +95,6 @@ export function monthlySum(
     }));
 }
 
-export function percent(numerator, denominator) {
+export function percent(numerator: number, denominator: number): number {
   return denominator ? Math.round((numerator / denominator) * 100) : 0;
 }

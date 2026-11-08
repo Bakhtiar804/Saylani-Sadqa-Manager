@@ -16,14 +16,25 @@ import {
   getCityOptions,
   getOverviewData,
 } from "@/lib/dashboard-data";
+import type { MetricItem } from "@/components/dashboard/metric-grid";
 
-async function DashboardContent({ searchParams }) {
+type DashboardPageProps = {
+  searchParams: Promise<{
+    range?: string | string[];
+    city?: string | string[];
+  }>;
+};
+
+async function DashboardContent({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
-  const data = getOverviewData({ range: params.range, city: params.city });
+  const data = getOverviewData({
+    range: typeof params.range === "string" ? params.range : undefined,
+    city: typeof params.city === "string" ? params.city : undefined,
+  });
   const taskCompletion = data.totals.tasks
     ? Math.round((data.totals.completedTasks / data.totals.tasks) * 100)
     : 0;
-  const metrics = [
+  const metrics: MetricItem[] = [
     {
       label: "Verified collections",
       value: formatPKR(data.totals.verifiedPKR),
@@ -207,7 +218,7 @@ function DashboardFallback() {
   );
 }
 
-export default function DashboardPage({ searchParams }) {
+export default function DashboardPage({ searchParams }: DashboardPageProps) {
   return (
     <Suspense fallback={<DashboardFallback />}>
       <DashboardContent searchParams={searchParams} />
