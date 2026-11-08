@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-// Set these to the public auth route paths when they are added to the app.
 const authRoutes: Record<"signIn" | "signUp", string | null> = {
-  signIn: null,
+  signIn: "/login",
   signUp: null,
 };
 
