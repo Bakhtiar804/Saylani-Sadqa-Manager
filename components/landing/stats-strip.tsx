@@ -1,13 +1,13 @@
 const stats = [
-  { value: "≈49,000", label: "Donation boxes in the network", detail: "PRD estimate" },
-  { value: "≈250", label: "Operational team members", detail: "PRD estimate" },
-  { value: "6", label: "Planned user roles" },
-  { value: "3", label: "Reporting periods", detail: "Daily, weekly, monthly" },
+  { value: "≈49,000", label: "Sadqa Boxes" },
+  { value: "≈250", label: "Operations Team Members" },
+  { value: "4", label: "Steps from Box to Report" },
+  { value: "3", label: "Reporting Periods", detail: "Daily · Weekly · Monthly" },
 ];
 
 export function StatsStrip() {
   return (
-    <section aria-label="Network and platform at a glance" className="bg-primary text-primary-foreground">
+    <section aria-label="Sadqa operations at a glance" className="bg-primary text-primary-foreground">
       <dl className="mx-auto grid max-w-7xl grid-cols-2 gap-x-4 gap-y-8 px-5 py-9 text-center sm:px-8 lg:grid-cols-4 lg:py-11">
         {stats.map(({ value, label, detail }) => (
           <div key={label} className="flex flex-col items-center">

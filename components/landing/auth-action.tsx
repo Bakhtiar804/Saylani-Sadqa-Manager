@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-// Set these to the public auth route paths when they are added to the app.
+// Keep actions disabled until their public auth routes are available.
 const authRoutes: Record<"signIn" | "signUp", string | null> = {
-  signIn: null,
+  signIn: "/sign-in",
   signUp: null,
 };
 
