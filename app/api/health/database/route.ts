@@ -1,6 +1,9 @@
 import { getDatabasePool } from "@/lib/db";
+import { connection } from "next/server";
 
 export async function GET() {
+  await connection();
+
   try {
     await getDatabasePool().query("SELECT 1");
     return Response.json(
