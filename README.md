@@ -62,6 +62,8 @@ Only if you are moving old accounts from an existing `app_admins` table, also ru
 
 For an older database that does not have `users.deleted_at`, run `database/migrate_team_account_deletion.sql`. A new database created from the current schema already has this column.
 
+For an existing database, run `database/migrate_activity_audit_log.sql` before using rider task updates, collection submission, or collection review.
+
 **Do not run the demo seed on production data.** The seed adds sample records and does not update records that already exist.
 
 The demo sign-in accounts and their local-only password are documented in [database/README.md](database/README.md). Use them only in a development database.

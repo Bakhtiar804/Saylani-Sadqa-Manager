@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Dispatch, SetStateAction } from "react";
 import type { CityOption, DataRecord, RecordColumn, RecordValue } from "@/lib/dashboard-types";
+import CollectionReviewForm from "@/components/dashboard/collection-review-form";
+import BoxStatusControl from "@/components/dashboard/box-status-control";
 
 function prettyLabel(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -29,9 +32,12 @@ type RecordExplorerProps = {
   totalRecords?: number;
   remoteEndpoint?: string;
   remoteStatuses?: string[];
+  allowCollectionReview?: boolean;
+  allowBoxStatusChange?: boolean;
 };
 
-export default function RecordExplorer({ title, description, records, columns, statusKey = "", cityKey = "city_id", dateKey = "", cities = [], initialSortDirection = "desc", totalRecords, remoteEndpoint, remoteStatuses = [] }: RecordExplorerProps) {
+export default function RecordExplorer({ title, description, records, columns, statusKey = "", cityKey = "city_id", dateKey = "", cities = [], initialSortDirection = "desc", totalRecords, remoteEndpoint, remoteStatuses = [], allowCollectionReview = false, allowBoxStatusChange = false }: RecordExplorerProps) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [city, setCity] = useState("all");
@@ -133,7 +139,7 @@ export default function RecordExplorer({ title, description, records, columns, s
       </div>
     </div>
     {remoteError && <p role="alert" className="mx-4 mt-4 rounded-lg bg-[#fbeceb] p-3 text-sm text-[#913a34]">{remoteError}</p>}
-    <div className="overflow-x-auto" aria-busy={isLoading}><table className="w-full min-w-[800px] border-collapse text-left"><thead className="bg-[#f8faf7]"><tr>{columns.map((column) => <th key={column.key} className="px-4 py-3 text-xs font-bold uppercase tracking-[.06em] text-[#657568]"><button onClick={() => toggleSort(column.key)} className="inline-flex items-center gap-1.5 hover:text-[#276431] focus-visible:outline-2 focus-visible:outline-[#61bb46]">{column.label}<span aria-hidden="true">{sort.key === column.key ? sort.direction === "asc" ? "↑" : "↓" : "↕"}</span></button></th>)}<th className="px-4 py-3 text-xs font-bold uppercase tracking-[.06em] text-[#657568]">Details</th></tr></thead><tbody>{visible.map((record, index) => { const recordId = String(record[columns[0]?.key] ?? `${index}`); const isOpen = expanded === recordId; return <FragmentRow key={recordId} record={record} isOpen={isOpen} columns={columns} onToggle={() => setExpanded(isOpen ? "" : recordId)} cityById={cityById}/>; })}</tbody></table>
+    <div className="overflow-x-auto" aria-busy={isLoading}><table className="w-full min-w-[800px] border-collapse text-left"><thead className="bg-[#f8faf7]"><tr>{columns.map((column) => <th key={column.key} className="px-4 py-3 text-xs font-bold uppercase tracking-[.06em] text-[#657568]"><button onClick={() => toggleSort(column.key)} className="inline-flex items-center gap-1.5 hover:text-[#276431] focus-visible:outline-2 focus-visible:outline-[#61bb46]">{column.label}<span aria-hidden="true">{sort.key === column.key ? sort.direction === "asc" ? "↑" : "↓" : "↕"}</span></button></th>)}<th className="px-4 py-3 text-xs font-bold uppercase tracking-[.06em] text-[#657568]">Details</th></tr></thead><tbody>{visible.map((record, index) => { const recordId = String(record[columns[0]?.key] ?? `${index}`); const isOpen = expanded === recordId; return <FragmentRow key={recordId} record={record} isOpen={isOpen} columns={columns} onToggle={() => setExpanded(isOpen ? "" : recordId)} cityById={cityById} allowCollectionReview={allowCollectionReview} allowBoxStatusChange={allowBoxStatusChange} onCollectionReviewed={(status) => { setRemoteRecords((current) => current.map((item) => item.collection_id === recordId ? { ...item, collection_status: status } : item)); router.refresh(); }}/>; })}</tbody></table>
       {visible.length === 0 && <div className="px-6 py-14 text-center"><p className="text-base font-semibold text-[#344639]">No matching records</p><p className="mt-1 text-sm text-[#718073]">Try clearing or adjusting your filters.</p></div>}
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e9efe7] px-5 py-4 text-sm text-[#657568]"><span>Showing {resultCount ? (currentPage - 1) * pageSize + 1 : 0}–{Math.min(currentPage * pageSize, resultCount)} of {resultCount.toLocaleString("en-PK")}</span><div className="flex items-center gap-2"><button disabled={currentPage <= 1 || isLoading} onClick={() => setPage(currentPage - 1)} className="rounded-lg border border-[#dce8dc] px-3 py-2 font-semibold transition hover:bg-[#f4f8f2] disabled:cursor-not-allowed disabled:opacity-40">Previous</button><span className="min-w-16 text-center text-xs">Page {currentPage} / {pageCount}</span><button disabled={currentPage >= pageCount || isLoading} onClick={() => setPage(currentPage + 1)} className="rounded-lg border border-[#dce8dc] px-3 py-2 font-semibold transition hover:bg-[#f4f8f2] disabled:cursor-not-allowed disabled:opacity-40">Next</button></div></div>
@@ -146,11 +152,14 @@ type FragmentRowProps = {
   columns: RecordColumn[];
   onToggle: () => void;
   cityById: Map<string, string>;
+  allowCollectionReview?: boolean;
+  allowBoxStatusChange?: boolean;
+  onCollectionReviewed: (status: string) => void;
 };
 
-function FragmentRow({ record, isOpen, columns, onToggle, cityById }: FragmentRowProps) {
+function FragmentRow({ record, isOpen, columns, onToggle, cityById, allowCollectionReview = false, allowBoxStatusChange = false, onCollectionReviewed }: FragmentRowProps) {
   return <>
     <tr className="border-b border-[#edf1eb] align-middle text-[13px] text-[#405345] transition hover:bg-[#fbfdf9]">{columns.map((column) => <td key={column.key} className="max-w-[260px] px-4 py-3.5"><span className="block overflow-hidden text-ellipsis whitespace-nowrap" title={String(record[column.key] ?? "—")}>{displayValue(record[column.key], column.key, cityById)}</span></td>)}<td className="px-4 py-3.5"><button aria-expanded={isOpen} onClick={onToggle} className="rounded-lg border border-[#dce8dc] px-3 py-2 text-xs font-semibold text-[#276431] transition hover:bg-[#edf6e9] focus-visible:outline-2 focus-visible:outline-[#61bb46]">{isOpen ? "Hide" : "Details"}</button></td></tr>
-    {isOpen && <tr className="border-b border-[#edf1eb] bg-[#f8fbf6]"><td colSpan={columns.length + 1} className="px-5 py-4"><div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">{Object.entries(record).filter(([key]) => !/password/i.test(key)).map(([key, value]) => <div key={key} className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wide text-[#718073]">{prettyLabel(key)}</p><p className="mt-1 break-words text-[13px] text-[#344639]">{displayValue(value, key, cityById)}</p></div>)}</div></td></tr>}
+    {isOpen && <tr className="border-b border-[#edf1eb] bg-[#f8fbf6]"><td colSpan={columns.length + 1} className="px-5 py-4"><div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">{Object.entries(record).filter(([key]) => !/password/i.test(key)).map(([key, value]) => <div key={key} className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wide text-[#718073]">{prettyLabel(key)}</p><p className="mt-1 break-words text-[13px] text-[#344639]">{displayValue(value, key, cityById)}</p></div>)}</div>{allowCollectionReview && typeof record.collection_id === "string" && <CollectionReviewForm collectionId={record.collection_id} status={String(record.collection_status ?? "")} onReviewed={onCollectionReviewed}/>}{allowBoxStatusChange && typeof record.box_id === "string" && <BoxStatusControl boxId={record.box_id} currentStatus={String(record.box_status ?? "")}/>}</td></tr>}
   </>;
 }

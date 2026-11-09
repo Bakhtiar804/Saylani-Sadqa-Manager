@@ -32,12 +32,14 @@ export async function getAdminCity() {
 }
 
 export async function getAdminRecords<const Keys extends readonly ("cities" | "partners" | "users" | "riders" | "donationBoxes" | "collections" | "riderTasks" | "fieldCollectionLog" | "cashHandoverDeposit" | "boxInspectionLog" | "boxStatusHistory" | "securityIncidents" | "operationalCosts")[]>(keys: Keys) {
-  const cityId = await getAdminCity();
-  if (!cityId) return { cityId, records: null };
+  const session = await getSession();
+  if (session.role !== "admin" && session.role !== "city_manager") redirect("/dashboard");
+  const cityId = session.cityId;
+  if (!cityId) return { cityId, role: session.role, records: null };
   const data = await getDashboardRecords(keys);
   const records = Object.fromEntries(Object.entries(data).map(([key, value]) => {
     if (key === "cities") return [key, (value as CityOption[]).filter((city) => city.city_id === cityId)];
     return [key, (value as Array<{ city_id?: string | null }>).filter((record) => record.city_id === cityId)];
   })) as Pick<typeof data, Keys[number]>;
-  return { cityId, records };
+  return { cityId, role: session.role, records };
 }

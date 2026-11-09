@@ -59,6 +59,7 @@ Run these files in order against a development database:
 2. `seed_demo.sql`
 3. `migrate_app_admins.sql`
 4. `migrate_team_account_deletion.sql` (required on an existing database before using account deletion)
+5. `migrate_activity_audit_log.sql` (required for rider task updates, collection submission, and collection review)
 
 The scripts are additive and repeatable. They preserve the existing numeric
 `users.id`, do not delete the legacy `app_admins` table or existing rows, and
