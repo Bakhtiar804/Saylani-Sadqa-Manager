@@ -4,11 +4,14 @@ import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
-import { cashHandoverDeposit, cities, operationalCosts } from "@/data/index";
+import { getDashboardRecords } from "@/lib/dashboard-data";
 import { countBy, sum, sumBy } from "@/lib/analytics";
 import { formatPKR } from "@/lib/dashboard-data";
+import { connection } from "next/server";
 
-export default function FinancePage() {
+export default async function FinancePage() {
+  await connection();
+  const { cashHandoverDeposit, cities, operationalCosts } = await getDashboardRecords(["cashHandoverDeposit", "cities", "operationalCosts"] as const);
   const deposits = countBy(cashHandoverDeposit, "deposit_status").map((item) => ({ ...item, color: item.name === "Deposited" ? "#276431" : item.name === "Reconciliation Required" ? "#b94b42" : "#d99a38" }));
   const costsByCategory = sumBy(operationalCosts, "cost_category", "cost_amount_pkr");
   const totalCosts = sum(operationalCosts, "cost_amount_pkr");

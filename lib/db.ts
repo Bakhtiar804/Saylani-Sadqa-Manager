@@ -73,7 +73,7 @@ export function getDatabasePool(): Pool {
 
   const pool = new Pool({
     ...databaseConnectionConfig(),
-    max: 5,
+    max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
     application_name: "saylani-sadqa-manager",

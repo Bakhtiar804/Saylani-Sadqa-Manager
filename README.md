@@ -1,60 +1,118 @@
 # Saylani Sadqa Manager
 
-## Run locally
+This app helps a team manage donation boxes, collections, riders, partners, cash handovers, inspections, and incidents. The included sample data is for development only. It is not live financial information.
 
-Install dependencies and start the development server:
+## What you need
+
+- Node.js 20.9 or newer
+- npm
+- A PostgreSQL database (Neon is supported)
+
+Check your versions:
 
 ```bash
-npm install
-npm run dev
+node --version
+npm --version
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+## Run the app on your computer
 
-## Neon PostgreSQL connection
+1. Open Terminal in the project folder.
+2. Install the project packages:
 
-1. In the Neon project dashboard, open **Connect** and select your branch,
-   database, and role. Enable **Connection pooling** and copy the PostgreSQL URL.
-2. Create `.env.local` in the project root using `.env.example` as a template.
-   Set `DATABASE_URL` to the full URL from Neon and restart the dev server.
+   ```bash
+   npm install
+   ```
 
-The connection is server-only and uses TLS with certificate and hostname
-verification. Git ignores `.env.local`. Keep the URL private because it contains
-the database password.
+3. Make a local settings file:
 
-Existing setups can still use `DB_HOST`, `DB_PORT` (default `5432`), `DB_NAME`,
-`DB_USER`, and `DB_PASSWORD` when `DATABASE_URL` is unset. If both are configured,
-the URL takes precedence.
+   ```bash
+   cp .env.example .env.local
+   ```
 
-Start the app and request
-[http://localhost:3000/api/health/database](http://localhost:3000/api/health/database).
-A successful connection returns `{"status":"connected"}`. On HTTP 503, check
-the terminal running Next.js for the connection error.
+4. Open `.env.local`. Set `DATABASE_URL` to your PostgreSQL connection URL. Set `AUTH_SECRET` to a long random value. On Mac, you can make one with:
 
-Use `getDatabasePool()` from `lib/db.ts` in server-only code for application
-queries. Pass user-provided values as query parameters (for example,
-`pool.query("SELECT ... WHERE id = $1", [id])`), never by concatenating them
-into SQL.
+   ```bash
+   openssl rand -base64 32
+   ```
 
-## Super-admin sign-in
+   Copy the generated value into `AUTH_SECRET`. Keep `.env.local` private. Do not commit it or send its values in chat.
 
-Configure `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD_HASH` (a salted scrypt
-hash), and a unique, random `AUTH_SECRET` in `.env.local` or your hosting
-provider's secret manager. Never commit credentials or use example values in
-production. Generate the password hash with Node.js `crypto.scryptSync()`,
-using a random 16-byte salt and base64url encoding for the salt and 64-byte
-hash, separated by a period. The sign-in endpoint verifies passwords on the
-server and issues an eight-hour, signed, HTTP-only session cookie. Dashboard
-routes require that session; use **Sign out** to end it.
+5. Set up a **development** database as described below.
+6. Start the app:
 
-The local administrator password configured for this demo is weak and should
-be replaced before deploying or exposing the app outside a trusted local
-environment.
+   ```bash
+   npm run dev
+   ```
 
-The super-admin can open **Admin Management** in the dashboard sidebar to add
-database-backed admin accounts. The `app_admins` table and its case-insensitive
-email index are created automatically when the management page is first
-opened. New admin passwords must be at least 12 characters and are stored as
-salted scrypt hashes. The configured super-admin account is shown separately
-from these database accounts; fictional sample users are not presented as
-real admins.
+7. Open [http://localhost:3000](http://localhost:3000).
+
+The database check is at [http://localhost:3000/api/health/database](http://localhost:3000/api/health/database). It should return `{"status":"connected"}`.
+
+## Set up the database
+
+In Neon, create or choose a development branch, then copy its connection URL into `.env.local`. Check the selected project, branch, and database before running SQL.
+
+For a new development database, use Neon’s SQL Editor and run these files in order:
+
+1. `database/schema.sql`
+2. `database/seed_demo.sql`
+
+Only if you are moving old accounts from an existing `app_admins` table, also run `database/migrate_app_admins.sql`.
+
+For an older database that does not have `users.deleted_at`, run `database/migrate_team_account_deletion.sql`. A new database created from the current schema already has this column.
+
+**Do not run the demo seed on production data.** The seed adds sample records and does not update records that already exist.
+
+The demo sign-in accounts and their local-only password are documented in [database/README.md](database/README.md). Use them only in a development database.
+
+## Roles and account management
+
+- **Super Admin** uses `/dashboard`. It can create Admin, City Manager, and Rider accounts, and remove those roles.
+- **Admin** uses `/dashboard/admin`. It can create or remove City Manager and Rider accounts in its assigned city.
+- **City Manager** uses `/dashboard/manager`. It can create or remove Rider accounts in its assigned city.
+- **Rider** uses `/dashboard/rider` and sees their own tasks and records.
+
+Removing a team account takes two confirmations. It disables sign-in and keeps old collection and audit records. Super Admin accounts cannot be removed from Team Accounts. There is no dashboard option to create another Super Admin; an authorized owner must provision one through the database.
+
+To reset an existing Super Admin password, run this in the project Terminal:
+
+```bash
+npm run reset:super-admin-password -- superadmin@example.com
+```
+
+Type a new password when prompted. The input stays hidden. The script updates the matching Super Admin in the same database the app uses. Sign in with the new password, not the generated hash.
+
+## Check the project
+
+Run lint and TypeScript checks:
+
+```bash
+npm run lint
+npx tsc --noEmit
+```
+
+Build the production app:
+
+```bash
+npx next build --webpack
+```
+
+Run the smoke checks after a successful build:
+
+```bash
+npm run test:smoke -- http://127.0.0.1:3100
+```
+
+The smoke command starts and stops the local production app itself. It checks public pages, dashboard access rules for all four roles found in the database, collection and field-log API permissions, city limits, database health, invalid sign-in, and logout. It does not create or delete accounts. It does not test a successful password sign-in or account changes.
+
+## Current limits
+
+- Admin and City Manager operations are view-only. Editing, assigning, verifying, and reconciling operational records are not implemented yet.
+- Riders can view their tasks and records but cannot update tasks or submit collections.
+- Successful password sign-in and account create/delete need a separate acceptance test with safe test accounts.
+- The public leaderboard is open to visitors. Review it before using real organization data.
+
+## What Git should ignore
+
+`.gitignore` excludes local secrets such as `.env.local`, dependency folders, build output, test reports, logs, local database files/backups, and operating-system/editor files. `.env.example` stays in Git because it contains placeholders, not real credentials. Keep source files such as SQL schemas and migrations tracked.

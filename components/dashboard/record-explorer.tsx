@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { CityOption, DataRecord, RecordColumn, RecordValue } from "@/lib/dashboard-types";
 
@@ -26,9 +26,12 @@ type RecordExplorerProps = {
   dateKey?: string;
   cities?: CityOption[];
   initialSortDirection?: "asc" | "desc";
+  totalRecords?: number;
+  remoteEndpoint?: string;
+  remoteStatuses?: string[];
 };
 
-export default function RecordExplorer({ title, description, records, columns, statusKey = "", cityKey = "city_id", dateKey = "", cities = [], initialSortDirection = "desc" }: RecordExplorerProps) {
+export default function RecordExplorer({ title, description, records, columns, statusKey = "", cityKey = "city_id", dateKey = "", cities = [], initialSortDirection = "desc", totalRecords, remoteEndpoint, remoteStatuses = [] }: RecordExplorerProps) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [city, setCity] = useState("all");
@@ -37,12 +40,19 @@ export default function RecordExplorer({ title, description, records, columns, s
   const [sort, setSort] = useState<{ key: string; direction: "asc" | "desc" }>({ key: dateKey || columns[0]?.key || "", direction: initialSortDirection });
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState("");
+  const [remoteRecords, setRemoteRecords] = useState(records);
+  const [remoteTotal, setRemoteTotal] = useState(totalRecords ?? records.length);
+  const [isLoading, setIsLoading] = useState(false);
+  const [remoteError, setRemoteError] = useState("");
+  const initialRemoteRequestSkipped = useRef(false);
   const pageSize = 10;
   const cityById = useMemo(() => new Map<string, string>(cities.map((item) => [item.city_id, item.city_name])), [cities]);
-  const statuses = useMemo(() => statusKey ? [...new Set(records.map((item) => String(item[statusKey] ?? "")).filter(Boolean))].sort() : [], [records, statusKey]);
+  const activeRecords = remoteEndpoint ? remoteRecords : records;
+  const statuses = useMemo(() => statusKey ? [...new Set([...remoteStatuses, ...activeRecords.map((item) => String(item[statusKey] ?? ""))].filter(Boolean))].sort() : [], [activeRecords, remoteStatuses, statusKey]);
   const filtered = useMemo(() => {
+    if (remoteEndpoint) return activeRecords;
     const needle = query.trim().toLowerCase();
-    return records.filter((record) => {
+    return activeRecords.filter((record) => {
       const matchesQuery = !needle || Object.entries(record).some(([key, value]) => key !== "is_demo_record" && String(value ?? "").toLowerCase().includes(needle));
       const matchesStatus = status === "all" || String(record[statusKey]) === status;
       const matchesCity = city === "all" || String(record[cityKey]) === city;
@@ -57,18 +67,64 @@ export default function RecordExplorer({ title, description, records, columns, s
       const result = typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: "base" });
       return sort.direction === "asc" ? result : -result;
     });
-  }, [records, query, status, city, from, to, statusKey, cityKey, dateKey, sort]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  }, [activeRecords, query, status, city, from, to, statusKey, cityKey, dateKey, sort, remoteEndpoint]);
+  const resultCount = remoteEndpoint ? remoteTotal : filtered.length;
+  const pageCount = Math.max(1, Math.ceil(resultCount / pageSize));
   const currentPage = Math.min(page, pageCount);
-  const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const visible = remoteEndpoint ? activeRecords : filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const resetPage = (setter: Dispatch<SetStateAction<string>>) => (value: string) => { setter(value); setPage(1); };
+
+  useEffect(() => {
+    if (!remoteEndpoint) return;
+    if (!isLoading) window.dispatchEvent(new Event("dashboard:data-ready"));
+  }, [remoteEndpoint, isLoading, remoteRecords, remoteError]);
+
+  useEffect(() => {
+    if (!remoteEndpoint) return;
+    if (!initialRemoteRequestSkipped.current) {
+      initialRemoteRequestSkipped.current = true;
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setIsLoading(true);
+      setRemoteError("");
+      window.dispatchEvent(new Event("dashboard:data-start"));
+      try {
+        const params = new URLSearchParams({
+          page: String(page),
+          search: query,
+          status,
+          city,
+          from,
+          to,
+          sort: sort.key,
+          direction: sort.direction,
+        });
+        const response = await fetch(`${remoteEndpoint}?${params}`, { signal: controller.signal, cache: "no-store" });
+        const result: { records?: DataRecord[]; totalRecords?: number; error?: string } = await response.json();
+        if (!response.ok || !result.records) throw new Error(result.error || "Could not load these records.");
+        setRemoteRecords(result.records);
+        setRemoteTotal(Number(result.totalRecords) || 0);
+      } catch (error) {
+        if (!controller.signal.aborted) setRemoteError(error instanceof Error ? error.message : "Could not load these records.");
+      } finally {
+        if (!controller.signal.aborted) setIsLoading(false);
+      }
+    }, query ? 250 : 0);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [remoteEndpoint, page, query, status, city, from, to, sort]);
 
   function toggleSort(key: string) {
     setSort((previous) => ({ key, direction: previous.key === key && previous.direction === "asc" ? "desc" : "asc" }));
+    setPage(1);
   }
 
   return <section className="overflow-hidden rounded-2xl border border-[#e3ebe0] bg-white shadow-[0_3px_14px_rgba(28,52,33,.035)]">
-    <div className="border-b border-[#e9efe7] p-5 sm:p-6"><div className="mb-5"><h2 className="text-lg font-bold text-[#203526]">{title}</h2><p className="mt-1 text-sm text-[#718073]">{description} <span className="font-semibold text-[#536455]">{records.length.toLocaleString("en-PK")} records</span></p></div>
+    <div className="border-b border-[#e9efe7] p-5 sm:p-6"><div className="mb-5"><h2 className="text-lg font-bold text-[#203526]">{title}</h2><p className="mt-1 text-sm text-[#718073]">{description} <span className="font-semibold text-[#536455]">{resultCount.toLocaleString("en-PK")} records</span></p></div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <label className="grid gap-1.5 text-xs font-semibold text-[#536455] sm:col-span-2 xl:col-span-2">Search records<input value={query} onChange={(event) => resetPage(setQuery)(event.target.value)} placeholder="Search IDs, locations, names..." className="h-10 rounded-lg border border-[#dce8dc] px-3 text-sm font-normal text-[#203526] outline-none placeholder:text-[#9aa69a] focus:border-[#276431] focus:ring-2 focus:ring-[#61bb46]/25"/></label>
         {statusKey && <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Status<select value={status} onChange={(event) => resetPage(setStatus)(event.target.value)} className="h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#203526] outline-none focus:border-[#276431] focus:ring-2 focus:ring-[#61bb46]/25"><option value="all">All statuses</option>{statuses.map((item) => <option key={item}>{item}</option>)}</select></label>}
@@ -76,10 +132,11 @@ export default function RecordExplorer({ title, description, records, columns, s
         {dateKey && <div className="grid grid-cols-2 gap-2"><label className="grid gap-1.5 text-xs font-semibold text-[#536455]">From<input type="date" value={from} onChange={(event) => resetPage(setFrom)(event.target.value)} className="h-10 min-w-0 rounded-lg border border-[#dce8dc] px-2 text-xs text-[#203526] outline-none focus:border-[#276431]"/></label><label className="grid gap-1.5 text-xs font-semibold text-[#536455]">To<input type="date" value={to} onChange={(event) => resetPage(setTo)(event.target.value)} className="h-10 min-w-0 rounded-lg border border-[#dce8dc] px-2 text-xs text-[#203526] outline-none focus:border-[#276431]"/></label></div>}
       </div>
     </div>
-    <div className="overflow-x-auto"><table className="w-full min-w-[800px] border-collapse text-left"><thead className="bg-[#f8faf7]"><tr>{columns.map((column) => <th key={column.key} className="px-4 py-3 text-xs font-bold uppercase tracking-[.06em] text-[#657568]"><button onClick={() => toggleSort(column.key)} className="inline-flex items-center gap-1.5 hover:text-[#276431] focus-visible:outline-2 focus-visible:outline-[#61bb46]">{column.label}<span aria-hidden="true">{sort.key === column.key ? sort.direction === "asc" ? "↑" : "↓" : "↕"}</span></button></th>)}<th className="px-4 py-3 text-xs font-bold uppercase tracking-[.06em] text-[#657568]">Details</th></tr></thead><tbody>{visible.map((record, index) => { const recordId = String(record[columns[0]?.key] ?? `${index}`); const isOpen = expanded === recordId; return <FragmentRow key={recordId} record={record} isOpen={isOpen} columns={columns} onToggle={() => setExpanded(isOpen ? "" : recordId)} cityById={cityById}/>; })}</tbody></table>
+    {remoteError && <p role="alert" className="mx-4 mt-4 rounded-lg bg-[#fbeceb] p-3 text-sm text-[#913a34]">{remoteError}</p>}
+    <div className="overflow-x-auto" aria-busy={isLoading}><table className="w-full min-w-[800px] border-collapse text-left"><thead className="bg-[#f8faf7]"><tr>{columns.map((column) => <th key={column.key} className="px-4 py-3 text-xs font-bold uppercase tracking-[.06em] text-[#657568]"><button onClick={() => toggleSort(column.key)} className="inline-flex items-center gap-1.5 hover:text-[#276431] focus-visible:outline-2 focus-visible:outline-[#61bb46]">{column.label}<span aria-hidden="true">{sort.key === column.key ? sort.direction === "asc" ? "↑" : "↓" : "↕"}</span></button></th>)}<th className="px-4 py-3 text-xs font-bold uppercase tracking-[.06em] text-[#657568]">Details</th></tr></thead><tbody>{visible.map((record, index) => { const recordId = String(record[columns[0]?.key] ?? `${index}`); const isOpen = expanded === recordId; return <FragmentRow key={recordId} record={record} isOpen={isOpen} columns={columns} onToggle={() => setExpanded(isOpen ? "" : recordId)} cityById={cityById}/>; })}</tbody></table>
       {visible.length === 0 && <div className="px-6 py-14 text-center"><p className="text-base font-semibold text-[#344639]">No matching records</p><p className="mt-1 text-sm text-[#718073]">Try clearing or adjusting your filters.</p></div>}
     </div>
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e9efe7] px-5 py-4 text-sm text-[#657568]"><span>Showing {filtered.length ? (currentPage - 1) * pageSize + 1 : 0}–{Math.min(currentPage * pageSize, filtered.length)} of {filtered.length.toLocaleString("en-PK")}</span><div className="flex items-center gap-2"><button disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} className="rounded-lg border border-[#dce8dc] px-3 py-2 font-semibold transition hover:bg-[#f4f8f2] disabled:cursor-not-allowed disabled:opacity-40">Previous</button><span className="min-w-16 text-center text-xs">Page {currentPage} / {pageCount}</span><button disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)} className="rounded-lg border border-[#dce8dc] px-3 py-2 font-semibold transition hover:bg-[#f4f8f2] disabled:cursor-not-allowed disabled:opacity-40">Next</button></div></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e9efe7] px-5 py-4 text-sm text-[#657568]"><span>Showing {resultCount ? (currentPage - 1) * pageSize + 1 : 0}–{Math.min(currentPage * pageSize, resultCount)} of {resultCount.toLocaleString("en-PK")}</span><div className="flex items-center gap-2"><button disabled={currentPage <= 1 || isLoading} onClick={() => setPage(currentPage - 1)} className="rounded-lg border border-[#dce8dc] px-3 py-2 font-semibold transition hover:bg-[#f4f8f2] disabled:cursor-not-allowed disabled:opacity-40">Previous</button><span className="min-w-16 text-center text-xs">Page {currentPage} / {pageCount}</span><button disabled={currentPage >= pageCount || isLoading} onClick={() => setPage(currentPage + 1)} className="rounded-lg border border-[#dce8dc] px-3 py-2 font-semibold transition hover:bg-[#f4f8f2] disabled:cursor-not-allowed disabled:opacity-40">Next</button></div></div>
   </section>;
 }
 

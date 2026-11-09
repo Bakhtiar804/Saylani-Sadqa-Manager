@@ -1,20 +1,25 @@
+import "server-only";
+
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 const SESSION_DURATION_SECONDS = 60 * 60 * 8;
 export const SESSION_COOKIE_NAME = "saylani_admin_session";
 
-type AdminSession = {
+export const APP_ROLES = ["super_admin", "admin", "city_manager", "rider"] as const;
+export type AppRole = (typeof APP_ROLES)[number];
+
+export type UserSession = {
+  userId: string;
   email: string;
-  role: "super_admin" | "admin";
-  adminId?: number;
+  name: string;
+  role: AppRole;
+  cityId: string | null;
   expiresAt: number;
 };
 
 function requiredEnvironmentVariable(name: string): string {
   const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
 }
 
@@ -24,83 +29,47 @@ function signSession(payload: string): string {
     .digest("base64url");
 }
 
-export function createAdminSession(
-  email: string,
-  role: AdminSession["role"],
-  adminId?: number,
-): {
+export function createUserSession(user: Omit<UserSession, "expiresAt">): {
   name: string;
   value: string;
   maxAge: number;
 } {
-  const expiresAt = Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS;
-  const payload = Buffer.from(
-    JSON.stringify({ email, role, adminId, expiresAt } satisfies AdminSession),
-  ).toString("base64url");
+  const maxAge = SESSION_DURATION_SECONDS;
+  const payload = Buffer.from(JSON.stringify({
+    ...user,
+    expiresAt: Math.floor(Date.now() / 1000) + maxAge,
+  } satisfies UserSession)).toString("base64url");
 
-  return {
-    name: SESSION_COOKIE_NAME,
-    value: `${payload}.${signSession(payload)}`,
-    maxAge: SESSION_DURATION_SECONDS,
-  };
+  return { name: SESSION_COOKIE_NAME, value: `${payload}.${signSession(payload)}`, maxAge };
 }
 
-export function verifyAdminSession(value: string | undefined): AdminSession | null {
+export function verifyUserSession(value: string | undefined): UserSession | null {
   if (!value) return null;
-
   const [payload, signature, ...extraParts] = value.split(".");
   if (!payload || !signature || extraParts.length > 0) return null;
 
-  const expectedSignature = Buffer.from(signSession(payload), "base64url");
-  const receivedSignature = Buffer.from(signature, "base64url");
-  if (
-    expectedSignature.length !== receivedSignature.length ||
-    !timingSafeEqual(expectedSignature, receivedSignature)
-  ) {
-    return null;
-  }
-
   try {
-    const session: unknown = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8"),
-    );
+    const expectedSignature = Buffer.from(signSession(payload), "base64url");
+    const receivedSignature = Buffer.from(signature, "base64url");
     if (
-      typeof session !== "object" ||
-      session === null ||
-      !("email" in session) ||
-      !("role" in session) ||
-      !("expiresAt" in session) ||
-      typeof session.email !== "string" ||
-      (session.role !== "super_admin" && session.role !== "admin") ||
-      typeof session.expiresAt !== "number" ||
+      expectedSignature.length !== receivedSignature.length ||
+      !timingSafeEqual(expectedSignature, receivedSignature)
+    ) return null;
+
+    const session: unknown = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (typeof session !== "object" || session === null) return null;
+    if (
+      !("userId" in session) || typeof session.userId !== "string" || !session.userId ||
+      !("email" in session) || typeof session.email !== "string" ||
+      !("name" in session) || typeof session.name !== "string" ||
+      !("role" in session) || typeof session.role !== "string" ||
+      !APP_ROLES.includes(session.role as AppRole) ||
+      !("cityId" in session) || !(typeof session.cityId === "string" || session.cityId === null) ||
+      !("expiresAt" in session) || typeof session.expiresAt !== "number" ||
       session.expiresAt <= Math.floor(Date.now() / 1000)
-    ) {
-      return null;
-    }
+    ) return null;
 
-    if (session.role === "super_admin") {
-      const configuredEmail = requiredEnvironmentVariable("SUPER_ADMIN_EMAIL");
-      if (session.email.toLowerCase() !== configuredEmail.toLowerCase()) {
-        return null;
-      }
-      return { email: session.email, role: session.role, expiresAt: session.expiresAt };
-    }
-
-    if (
-      !("adminId" in session) ||
-      typeof session.adminId !== "number" ||
-      !Number.isSafeInteger(session.adminId) ||
-      session.adminId < 1
-    ) {
-      return null;
-    }
-
-    return {
-      email: session.email,
-      role: session.role,
-      adminId: session.adminId,
-      expiresAt: session.expiresAt,
-    };
+    return session as UserSession;
   } catch {
     return null;
   }

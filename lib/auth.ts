@@ -2,14 +2,6 @@ import "server-only";
 
 import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 
-function requiredEnvironmentVariable(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
-
 function decodePasswordHash(encodedHash: string): { salt: Buffer; hash: Buffer } {
   const [encodedSalt, encodedKey, ...extraParts] = encodedHash.split(".");
   const salt = Buffer.from(encodedSalt ?? "", "base64url");
@@ -59,16 +51,4 @@ export async function verifyPassword(
   const { salt, hash } = decodePasswordHash(encodedHash);
   const derivedPassword = await derivePassword(password, salt);
   return timingSafeEqual(derivedPassword, hash);
-}
-
-export function getSuperAdminEmail(): string {
-  return requiredEnvironmentVariable("SUPER_ADMIN_EMAIL").toLowerCase();
-}
-
-export async function verifyAdminCredentials(email: string, password: string): Promise<boolean> {
-  const matchesSuperAdmin = email.trim().toLowerCase() === getSuperAdminEmail();
-  const encodedHash = requiredEnvironmentVariable("SUPER_ADMIN_PASSWORD_HASH");
-  const validPassword = await verifyPassword(password, encodedHash);
-
-  return matchesSuperAdmin && validPassword;
 }

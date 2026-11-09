@@ -2,6 +2,8 @@ import Link from "next/link";
 import PartnerAvatar from "@/components/dashboard/partner-avatar";
 import { formatPKR } from "@/lib/dashboard-data";
 import { getPublicPartnerLeaderboard } from "@/lib/partner-leaderboard";
+import { getDashboardRecords } from "@/lib/dashboard-data";
+import { connection } from "next/server";
 
 type PublicPartner = {
   rank: number;
@@ -115,8 +117,10 @@ function PublicPartnerRow({ partner }: { partner: PublicPartner }) {
   );
 }
 
-export default function PublicLeaderboardPage() {
-  const rankings: PublicPartner[] = getPublicPartnerLeaderboard();
+export default async function PublicLeaderboardPage() {
+  await connection();
+  const records = await getDashboardRecords(["cities", "partners", "collections", "donationBoxes"] as const);
+  const rankings: PublicPartner[] = getPublicPartnerLeaderboard(records);
   const topThree = rankings.slice(0, 3);
   const remainingPartners = rankings.slice(3);
 

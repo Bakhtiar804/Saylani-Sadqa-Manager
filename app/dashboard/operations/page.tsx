@@ -4,10 +4,13 @@ import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
-import { boxInspectionLog, cities, securityIncidents } from "@/data/index";
+import { getDashboardRecords } from "@/lib/dashboard-data";
 import { countBy } from "@/lib/analytics";
+import { connection } from "next/server";
 
-export default function OperationsPage() {
+export default async function OperationsPage() {
+  await connection();
+  const { boxInspectionLog, cities, securityIncidents } = await getDashboardRecords(["boxInspectionLog", "cities", "securityIncidents"] as const);
   const conditions = countBy(boxInspectionLog, "box_condition");
   const severities = countBy(securityIncidents, "severity", ["High", "Medium", "Low"]).map((item) => ({ ...item, color: item.name === "High" ? "#b94b42" : item.name === "Medium" ? "#d99a38" : "#61bb46" }));
   const followups = boxInspectionLog.filter((record) => record.follow_up_required === "Yes").length;

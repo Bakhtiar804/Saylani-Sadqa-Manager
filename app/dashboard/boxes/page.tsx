@@ -4,14 +4,17 @@ import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
-import { boxStatusHistory, cities, donationBoxes } from "@/data/index";
+import { getDashboardRecords } from "@/lib/dashboard-data";
 import { countBy } from "@/lib/analytics";
+import { connection } from "next/server";
 
-export default function DonationBoxesPage() {
+export default async function DonationBoxesPage() {
+  await connection();
+  const { boxStatusHistory, cities, donationBoxes } = await getDashboardRecords(["boxStatusHistory", "cities", "donationBoxes"] as const);
   const statusData = countBy(donationBoxes, "box_status", ["Active", "Inactive", "Damaged", "Under Review"]).map((item) => ({ ...item, color: item.name === "Active" ? "#276431" : item.name === "Damaged" ? "#b94b42" : item.name === "Under Review" ? "#d99a38" : "#91a08f" }));
   const cityData = countBy(donationBoxes.map((box) => ({ ...box, city_name: box.city_name || cities.find((city) => city.city_id === box.city_id)?.city_name })), "city_name");
   const active = donationBoxes.filter((box) => box.box_status === "Active").length;
-  const needsAttention = donationBoxes.filter((box) => ["Damaged", "Under Review"].includes(box.box_status)).length;
+  const needsAttention = donationBoxes.filter((box) => ["Damaged", "Under Review"].includes(String(box.box_status))).length;
   return <>
     <PageHeading eyebrow="Box management" title="Donation Boxes" description="Explore the registered box network, locations, custodians, partner links, and status changes."/>
     <DemoNotice/>

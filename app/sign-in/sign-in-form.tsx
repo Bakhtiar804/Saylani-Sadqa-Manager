@@ -57,7 +57,7 @@ export function SignInForm() {
         }),
       });
 
-      const result: { error?: unknown } = await response.json();
+      const result: { error?: unknown; redirectTo?: unknown } = await response.json();
       if (!response.ok) {
         setStatus(
           typeof result.error === "string"
@@ -67,7 +67,7 @@ export function SignInForm() {
         return;
       }
 
-      router.replace("/dashboard");
+      router.replace(typeof result.redirectTo === "string" ? result.redirectTo : "/dashboard");
     } catch {
       setStatus("Unable to reach the sign-in service. Please try again.");
     } finally {

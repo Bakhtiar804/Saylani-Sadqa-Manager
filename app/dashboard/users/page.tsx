@@ -4,13 +4,13 @@ import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
-import { cities, users as sourceUsers } from "@/data/index";
+import { getDashboardRecords } from "@/lib/dashboard-data";
 import { countBy } from "@/lib/analytics";
+import { connection } from "next/server";
 
-export default function UsersPage() {
-  const users = sourceUsers.map((user) => Object.fromEntries(
-    Object.entries(user).filter(([key]) => key !== "demo_password"),
-  ));
+export default async function UsersPage() {
+  await connection();
+  const { cities, users } = await getDashboardRecords(["cities", "users"] as const);
   const roleData = countBy(users, "role");
   const statusData = countBy(users, "account_status", ["Active", "Inactive", "Suspended"]);
   const cityData = countBy(users.map((user) => ({ ...user, city_name: cities.find((city) => city.city_id === user.city_id)?.city_name || "Unassigned" })), "city_name");

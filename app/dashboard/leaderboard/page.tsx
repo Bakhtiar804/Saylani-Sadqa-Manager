@@ -8,10 +8,11 @@ import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
-import { cities } from "@/data/index";
+import { getDashboardRecords } from "@/lib/dashboard-data";
 import { countBy } from "@/lib/analytics";
 import { formatPKR } from "@/lib/dashboard-data";
 import { getPartnerLeaderboardData } from "@/lib/partner-leaderboard";
+import { connection } from "next/server";
 
 export const metadata = {
   title: "Partner Leaderboard | Super Admin",
@@ -32,8 +33,10 @@ const boxStatusColors = {
   "Under Review": "#d99a38",
 };
 
-export default function AdminPartnerLeaderboardPage() {
-  const data = getPartnerLeaderboardData();
+export default async function AdminPartnerLeaderboardPage() {
+  await connection();
+  const records = await getDashboardRecords(["cities", "partners", "collections", "donationBoxes"] as const);
+  const data = getPartnerLeaderboardData(records);
   const partnershipStatusData = countBy(
     data.partners,
     "partnership_status",
@@ -155,7 +158,7 @@ export default function AdminPartnerLeaderboardPage() {
         ]}
         statusKey="partnership_status"
         cityKey="city_id"
-        cities={cities}
+        cities={records.cities}
         initialSortDirection="asc"
       />
     </>

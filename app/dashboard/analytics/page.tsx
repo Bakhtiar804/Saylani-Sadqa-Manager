@@ -4,11 +4,15 @@ import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
-import { boxInspectionLog, boxStatusHistory, cashHandoverDeposit, cities, collections, donationBoxes, fieldCollectionLog, kpiDefinitions, operationalCosts, partners, proposedFieldDictionary, readme, researchAndAssumptions, riderTasks, riders, securityIncidents, users } from "@/data/index";
+import { kpiDefinitions, proposedFieldDictionary, readme, researchAndAssumptions } from "@/data/index";
+import { getAllRecords } from "@/lib/dashboard-data";
 import { countBy, monthlySum, percent, sum } from "@/lib/analytics";
 import { formatPKR } from "@/lib/dashboard-data";
+import { connection } from "next/server";
 
-export default function AnalyticsPage() {
+export default async function AnalyticsPage() {
+  await connection();
+  const { boxInspectionLog, boxStatusHistory, cashHandoverDeposit, cities, collections, donationBoxes, fieldCollectionLog, operationalCosts, partners, riderTasks, riders, securityIncidents, users } = await getAllRecords();
   const verified = collections.filter((record) => record.collection_status === "Verified");
   const cityValues = cities.map((city) => ({ name: city.city_name, value: sum(verified.filter((record) => record.city_id === city.city_id), "collection_amount_pkr") })).sort((a, b) => b.value - a.value);
   const partnerValues = partners.map((partner) => ({ name: partner.partner_name, value: sum(verified.filter((record) => record.partner_id === partner.partner_id), "collection_amount_pkr") })).sort((a, b) => b.value - a.value);

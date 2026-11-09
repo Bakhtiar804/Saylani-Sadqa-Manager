@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import {
   BreakdownBarChart,
   ChartLegend,
@@ -11,12 +13,14 @@ import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
+import DashboardSkeleton from "@/components/dashboard/dashboard-skeleton";
+import { connection } from "next/server";
 import {
   formatPKR,
-  getCityOptions,
   getOverviewData,
 } from "@/lib/dashboard-data";
 import type { MetricItem } from "@/components/dashboard/metric-grid";
+import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 
 type DashboardPageProps = {
   searchParams: Promise<{
@@ -26,8 +30,9 @@ type DashboardPageProps = {
 };
 
 async function DashboardContent({ searchParams }: DashboardPageProps) {
+  await connection();
   const params = await searchParams;
-  const data = getOverviewData({
+  const data = await getOverviewData({
     range: typeof params.range === "string" ? params.range : undefined,
     city: typeof params.city === "string" ? params.city : undefined,
   });
@@ -71,18 +76,25 @@ async function DashboardContent({ searchParams }: DashboardPageProps) {
     { key: "collection_amount_pkr", label: "Amount" },
     { key: "collection_status", label: "Status" },
   ];
+  const todayLabel = new Intl.DateTimeFormat("en-PK", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "Asia/Karachi",
+  }).format(new Date());
   return (
     <>
       <PageHeading
-        eyebrow="Saturday, November 7, 2026"
-        title="Super Admin Overview"
+        eyebrow={todayLabel}
+        title="Dashboard Overview"
         description="Monitor collection performance, box coverage, and field operations across the network."
       />
       <DemoNotice />
       <DashboardFilters
         range={data.range}
         city={data.city}
-        cities={getCityOptions()}
+        cities={data.cities}
       />
       <MetricGrid items={metrics} />
       <div className="mb-6 grid grid-cols-1 gap-5 2xl:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
@@ -196,32 +208,22 @@ async function DashboardContent({ searchParams }: DashboardPageProps) {
         columns={collectionColumns}
         statusKey="collection_status"
         dateKey="collection_date"
-        cities={getCityOptions()}
+        cities={data.cities}
       />
     </>
   );
 }
 
-function DashboardFallback() {
-  return (
-    <main aria-busy="true" className="space-y-6">
-      <div className="h-3 w-36 animate-pulse rounded bg-[#e5eee2]" />
-      <div className="h-10 w-72 max-w-full animate-pulse rounded-lg bg-[#e5eee2]" />
-      <div className="h-5 w-full max-w-xl animate-pulse rounded bg-[#edf3eb]" />
-      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="h-32 animate-pulse rounded-2xl bg-[#edf3eb]" />
-        ))}
-      </div>
-      <div className="h-80 animate-pulse rounded-2xl bg-[#edf3eb]" />
-    </main>
-  );
+export default function DashboardPage({ searchParams }: DashboardPageProps) {
+  return <Suspense fallback={<DashboardSkeleton />}><DashboardGate searchParams={searchParams} /></Suspense>;
 }
 
-export default function DashboardPage({ searchParams }: DashboardPageProps) {
-  return (
-    <Suspense fallback={<DashboardFallback />}>
-      <DashboardContent searchParams={searchParams} />
-    </Suspense>
-  );
+async function DashboardGate({ searchParams }: DashboardPageProps) {
+  await connection();
+  const cookieStore = await cookies();
+  const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  if (session?.role === "admin") redirect("/dashboard/admin");
+  if (session?.role === "city_manager") redirect("/dashboard/manager");
+  if (session?.role === "rider") redirect("/dashboard/rider");
+  return <Suspense fallback={<DashboardSkeleton />}><DashboardContent searchParams={searchParams} /></Suspense>;
 }

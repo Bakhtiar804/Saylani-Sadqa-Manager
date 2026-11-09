@@ -4,11 +4,14 @@ import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
-import { cities, collections, partners } from "@/data/index";
+import { getDashboardRecords } from "@/lib/dashboard-data";
 import { countBy, sum } from "@/lib/analytics";
 import { formatPKR } from "@/lib/dashboard-data";
+import { connection } from "next/server";
 
-export default function PartnersPage() {
+export default async function PartnersPage() {
+  await connection();
+  const { cities, collections, partners } = await getDashboardRecords(["cities", "collections", "partners"] as const);
   const verified = collections.filter((record) => record.collection_status === "Verified");
   const records = partners.map((partner) => {
     const associated = verified.filter((record) => record.partner_id === partner.partner_id);

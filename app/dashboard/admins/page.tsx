@@ -1,37 +1,40 @@
-import AdminManagement from "@/components/dashboard/admin-management";
+import TeamAccountManagement from "@/components/dashboard/team-account-management";
 import PageHeading from "@/components/dashboard/page-heading";
-import { listAdminAccounts } from "@/lib/admin-accounts";
-import { getSuperAdminEmail } from "@/lib/auth";
-import { SESSION_COOKIE_NAME, verifyAdminSession } from "@/lib/session";
+import { listTeamAccounts } from "@/lib/admin-accounts";
+import { getDashboardRecords } from "@/lib/dashboard-data";
+import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 
 export const metadata = {
-  title: "Admin Management | Saylani Sadqa Manager",
-  description: "Create and review dashboard administrator accounts.",
+  title: "Team Accounts | Saylani Sadqa Manager",
+  description: "Create and review role accounts.",
 };
 
 export default async function AdminManagementPage() {
+  await connection();
   const cookieStore = await cookies();
-  const session = verifyAdminSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
   if (!session) redirect("/sign-in");
   if (session.role !== "super_admin") redirect("/dashboard");
 
-  const admins = await listAdminAccounts(getSuperAdminEmail());
+  const [accounts, { cities }] = await Promise.all([
+    listTeamAccounts(session), getDashboardRecords(["cities"] as const),
+  ]);
 
   return (
     <>
       <PageHeading
         eyebrow="Access administration"
-        title="Admin Management"
-        description="Create dashboard administrator accounts and review the accounts currently configured for this application."
+        title="Team Accounts"
+        description="Create Admin, City Manager, and Rider logins with a city assignment."
       />
       <div className="mb-6 rounded-xl border border-[#dce8dc] bg-[#f5faf2] px-4 py-3 text-sm leading-6 text-[#536455]">
-        Existing sample users are not included here. This list contains the
-        configured super-admin account and real admin accounts saved in
-        PostgreSQL.
+        Super Admins can create Admin, City Manager, and Rider accounts. City
+        Managers and Riders are linked to the city selected below.
       </div>
-      <AdminManagement initialAdmins={admins} />
+      <TeamAccountManagement actorRole="super_admin" initialAccounts={accounts} cities={cities} assignedCity={null} />
     </>
   );
 }
