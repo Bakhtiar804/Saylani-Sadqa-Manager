@@ -1,7 +1,6 @@
-import { createTeamAccount, isActiveLoginAccount, listTeamAccounts, softDeleteTeamAccount, TeamAccountDeleteError, type TeamRole } from "@/lib/admin-accounts";
+import { createTeamAccount, listTeamAccounts, softDeleteTeamAccount, TeamAccountDeleteError, type TeamRole } from "@/lib/admin-accounts";
 import { hashPassword } from "@/lib/auth";
-import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
-import { cookies } from "next/headers";
+import { getOperationsSession } from "@/lib/operations-auth";
 
 const allowedRoles: Record<string, readonly TeamRole[]> = {
   super_admin: ["admin", "city_manager", "rider"],
@@ -9,15 +8,8 @@ const allowedRoles: Record<string, readonly TeamRole[]> = {
   city_manager: ["rider"],
 };
 
-async function getSession() {
-  const cookieStore = await cookies();
-  const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
-  if (!session || !await isActiveLoginAccount(session.userId)) return null;
-  return session;
-}
-
 export async function DELETE(request: Request) {
-  const session = await getSession();
+  const session = await getOperationsSession();
   if (!session || !allowedRoles[session.role]) {
     return Response.json({ error: "Team management access is required." }, { status: 403 });
   }
@@ -47,7 +39,7 @@ export async function DELETE(request: Request) {
 }
 
 export async function GET() {
-  const session = await getSession();
+  const session = await getOperationsSession();
   if (!session || !allowedRoles[session.role]) {
     return Response.json({ error: "Team management access is required." }, { status: 403 });
   }
@@ -61,7 +53,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const session = await getSession();
+  const session = await getOperationsSession();
   if (!session || !allowedRoles[session.role]) {
     return Response.json({ error: "Team management access is required." }, { status: 403 });
   }

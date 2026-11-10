@@ -35,7 +35,7 @@ export const cityManagerDashboardModules: DashboardModule[] = [
   { href: "/dashboard/manager/boxes", label: "Donation Boxes", mobileLabel: "Boxes", icon: "box" },
   { href: "/dashboard/manager/riders", label: "Riders & Tasks", mobileLabel: "Riders", icon: "bike" },
   { href: "/dashboard/manager/operations", label: "Field Operations", mobileLabel: "Operations", icon: "shield" },
-  { href: "/dashboard/manager/team", label: "Team Accounts", mobileLabel: "Team", icon: "users" },
+  { href: "/dashboard/manager/team", label: "Rider Accounts", mobileLabel: "Accounts", icon: "users" },
 ];
 
 export const riderDashboardModules: DashboardModule[] = [

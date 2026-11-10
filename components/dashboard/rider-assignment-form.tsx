@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { DataRecord } from "@/lib/dashboard-types";
+import { getPakistanDate, taskTypes } from "@/lib/task-assignment";
 
 type Rider = DataRecord & {
   rider_id: string;
@@ -19,28 +20,34 @@ type Box = DataRecord & {
   box_status: string;
 };
 
-const taskTypes = ["Scheduled Collection", "Box Verification", "Follow-up Visit"] as const;
 const fieldClass = "h-10 w-full rounded-lg border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#203526] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#61bb46]";
 
-export default function RiderAssignmentForm({ riders, boxes }: { riders: DataRecord[]; boxes: DataRecord[] }) {
+export default function RiderAssignmentForm({ riders, boxes, today }: { riders: DataRecord[]; boxes: DataRecord[]; today: string }) {
   const router = useRouter();
   const activeRiders = (riders as Rider[]).filter((rider) => rider.employment_status === "Active");
-  const activeBoxes = (boxes as Box[]).filter((box) => box.box_status === "Active");
   const [riderId, setRiderId] = useState("");
   const [taskType, setTaskType] = useState<(typeof taskTypes)[number]>(taskTypes[0]);
+  const [minDate, setMinDate] = useState(today);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const rider = activeRiders.find((item) => item.rider_id === riderId);
-  const availableBoxes = activeBoxes.filter((box) => box.city_id === rider?.city_id);
+  const isCollection = taskType === "Scheduled Collection";
+  const availableBoxes = (boxes as Box[]).filter((box) => box.city_id === rider?.city_id && (!isCollection || box.box_status === "Active"));
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy(true);
     setError("");
     setSuccess("");
     const form = event.currentTarget;
     const values = Object.fromEntries(new FormData(form).entries());
+    const currentDate = getPakistanDate();
+    setMinDate(currentDate);
+    if (typeof values.taskDate !== "string" || values.taskDate < currentDate) {
+      setError("Choose today or a future task date.");
+      return;
+    }
+    setBusy(true);
     try {
       const response = await fetch("/api/dashboard/rider-assignments", {
         method: "POST",
@@ -76,14 +83,14 @@ export default function RiderAssignmentForm({ riders, boxes }: { riders: DataRec
         </label>
         <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">
           Donation box
-          <select name="boxId" required disabled={!riderId || availableBoxes.length === 0} className={fieldClass}>
+          <select key={riderId + taskType} name="boxId" required disabled={!riderId || availableBoxes.length === 0} className={fieldClass}>
             <option value="">{riderId ? "Choose a box in the rider's city" : "Choose a rider first"}</option>
-            {availableBoxes.map((item) => <option key={item.box_id} value={item.box_id}>{item.box_id} · {item.area} · {item.city_name}</option>)}
+            {availableBoxes.map((item) => <option key={item.box_id} value={item.box_id}>{item.box_id} · {item.area} · {item.city_name} · {item.box_status}</option>)}
           </select>
         </label>
         <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">
           Task date
-          <input name="taskDate" type="date" required className={fieldClass}/>
+          <input name="taskDate" type="date" min={minDate} required onFocus={() => setMinDate(getPakistanDate())} className={fieldClass}/>
         </label>
         <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">
           Task type
@@ -92,7 +99,7 @@ export default function RiderAssignmentForm({ riders, boxes }: { riders: DataRec
           </select>
         </label>
         {activeRiders.length === 0 && <p className="text-sm text-[#76561a] sm:col-span-2 xl:col-span-4">There are no active riders available to assign.</p>}
-        {riderId && availableBoxes.length === 0 && <p className="text-sm text-[#76561a] sm:col-span-2 xl:col-span-4">There are no active boxes in this rider’s city.</p>}
+        {riderId && availableBoxes.length === 0 && <p className="text-sm text-[#76561a] sm:col-span-2 xl:col-span-4">There are no eligible boxes in this rider’s city for this task type.</p>}
         {error && <p role="alert" className="text-sm text-[#913a34] sm:col-span-2 xl:col-span-4">{error}</p>}
         {success && <p role="status" className="text-sm text-[#276431] sm:col-span-2 xl:col-span-4">{success}</p>}
         <div className="sm:col-span-2 xl:col-span-4">

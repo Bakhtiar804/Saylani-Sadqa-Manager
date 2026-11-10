@@ -1,7 +1,5 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { CollectionTrendChart, StatusDonutChart } from "@/components/dashboard/charts";
 import ChartPanel from "@/components/dashboard/chart-panel";
 import DemoNotice from "@/components/dashboard/demo-notice";
@@ -9,7 +7,7 @@ import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
 import { formatPKR, getCityName, getOverviewData } from "@/lib/dashboard-data";
-import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
+import { getAdminSession } from "./admin-data";
 
 type AdminDashboardProps = { searchParams: Promise<{ range?: string }> };
 
@@ -27,10 +25,7 @@ const shortcuts = [
 
 export default async function AdminDashboardPage({ searchParams }: AdminDashboardProps) {
   await connection();
-  const cookieStore = await cookies();
-  const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
-  if (!session) redirect("/sign-in");
-  if (session.role !== "admin") redirect("/dashboard");
+  const session = await getAdminSession();
 
   const params = await searchParams;
   if (!session.cityId) {
@@ -38,7 +33,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
       <PageHeading eyebrow="Admin workspace" title="Admin Dashboard" description="Your operational overview will appear once an operating city is assigned to your account." />
       <section className="rounded-2xl border border-[#e3ebe0] bg-white p-6 shadow-[0_3px_14px_rgba(28,52,33,.035)]">
         <h2 className="text-lg font-bold text-[#203526]">City assignment required</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#657568]">Admin dashboards are scoped to one city. Ask a Super Admin to assign a city to this account, then sign in again.</p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#657568]">Admin dashboards are scoped to one city. Ask a Super Admin to assign a city to this account.</p>
       </section>
     </>;
   }
@@ -80,7 +75,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
         <p className="mt-5 border-t border-[#edf1eb] pt-4 text-xs text-[#718073]">Verified collections in this period: <b className="text-[#203526]">{formatPKR(data.totals.verifiedPKR)}</b></p>
       </ChartPanel></div>
     </div>
-    <RecordExplorer title="Recent collection records" description={`Latest collection records from ${cityName}. The list stays within the city assigned to your Admin account.`} records={data.recentCollections} columns={[{ key: "collection_id", label: "Collection ID" }, { key: "collection_date", label: "Date" }, { key: "collection_amount_pkr", label: "Amount" }, { key: "collection_status", label: "Status" }]} statusKey="collection_status" dateKey="collection_date" cities={data.cities} />
+    <RecordExplorer title="Recent collection records" description={`Latest collection records from ${cityName}. The list stays within the city assigned to your Admin account.`} records={data.recentCollections} columns={[{ key: "collection_id", label: "Collection ID" }, { key: "collection_date", label: "Date" }, { key: "collection_amount_pkr", label: "Amount" }, { key: "collection_status", label: "Status" }]} statusKey="collection_status" dateKey="collection_date" cities={data.cities.filter((city) => city.city_id === session.cityId)} />
     <section className="rounded-2xl border border-[#e3ebe0] bg-white p-5 shadow-[0_3px_14px_rgba(28,52,33,.035)] sm:p-6">
       <div id="recent-activity" className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-bold text-[#203526]">Recent activity</h2><p className="mt-1 text-sm text-[#718073]">Latest collection, incident, and inspection updates for {cityName}.</p></div><Link href="#review-status" className="text-sm font-semibold text-[#276431] hover:underline">Review collection status →</Link></div>
       <div className="divide-y divide-[#edf1eb]">{data.activity.length ? data.activity.map((item) => <article key={`${item.id}-${item.title}`} className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0"><span className={`mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl ${item.tone === "green" ? "bg-[#e9f4e4] text-[#32723a]" : item.tone === "red" ? "bg-[#fbeceb] text-[#a9483f]" : item.tone === "blue" ? "bg-[#eaf1fc] text-[#326ac1]" : "bg-[#fbf0e3] text-[#a96d20]"}`}>{item.icon === "shield" ? "◇" : item.icon === "box" ? "▣" : "₨"}</span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-[#344639]">{item.title}</p><p className="mt-1 text-[13px] text-[#657568]">{item.detail}</p></div><time className="shrink-0 text-xs text-[#718073]">{item.date}</time></article>) : <p className="py-8 text-center text-sm text-[#718073]">No operational activity for this period.</p>}</div>

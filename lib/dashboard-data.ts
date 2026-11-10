@@ -50,10 +50,16 @@ export function formatPKR(value: number | string | null | undefined): string {
 
 async function readRows(sql: string, parameters?: unknown[]): Promise<DashboardRecord[]> {
   const result = await getDatabasePool().query(sql, parameters);
+  // PostgreSQL DATE values are parsed at local midnight and have no time zone.
+  const dateColumns = new Set(result.fields.filter((field) => field.dataTypeID === 1082).map((field) => field.name));
   return result.rows.map((row: Record<string, unknown>) => {
     const normalized: DashboardRecord = {};
     for (const [key, value] of Object.entries(row)) {
-      if (value instanceof Date) normalized[key] = value.toISOString();
+      if (value instanceof Date) {
+        normalized[key] = dateColumns.has(key)
+          ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`
+          : value.toISOString();
+      }
       else if (
         typeof value === "string" &&
         (/(_pkr|_amount|^amount_|^difference_pkr$|^installed_boxes$|^active_boxes$|^inactive_boxes$|^damaged_boxes$|^under_review_boxes$|^verified_count$|^pending_count$|^flagged_count$|^collection_count$|^records$|^boxes$|^tasks$|^completed_tasks$|^needs_attention_boxes$)/i.test(key))
@@ -389,21 +395,23 @@ export function getCityName(cityId: string, cities: CityOption[]): string {
 }
 
 function getRangeBounds(minDate: string | null, maxDate: string | null, range = "30") {
-  if (!minDate || !maxDate) {
+  if (!maxDate) {
     const today = new Date().toISOString().slice(0, 10);
     return { startDate: today, endDate: today };
   }
   const selectedRange = ["7", "30", "90", "all"].includes(String(range)) ? String(range) : "30";
   const start = new Date(`${maxDate}T00:00:00Z`);
-  if (selectedRange === "all") start.setTime(new Date(`${minDate}T00:00:00Z`).getTime());
-  else start.setUTCDate(start.getUTCDate() - Number(selectedRange) + 1);
-  const firstAvailable = new Date(`${minDate}T00:00:00Z`);
-  if (start < firstAvailable) start.setTime(firstAvailable.getTime());
+  if (selectedRange === "all" && minDate) start.setTime(new Date(`${minDate}T00:00:00Z`).getTime());
+  else if (selectedRange !== "all") start.setUTCDate(start.getUTCDate() - Number(selectedRange) + 1);
+  if (minDate) {
+    const firstAvailable = new Date(`${minDate}T00:00:00Z`);
+    if (start < firstAvailable) start.setTime(firstAvailable.getTime());
+  }
   return { startDate: start.toISOString().slice(0, 10), endDate: maxDate };
 }
 
 export async function getOverviewData(
-  { range = "30", city = "all" }: { range?: string; city?: string } = {},
+  { range = "30", city = "all", cityToday }: { range?: string; city?: string; cityToday?: string } = {},
 ) {
   "use cache";
   cacheLife({ stale: 5, revalidate: 10, expire: 60 });
@@ -412,12 +420,27 @@ export async function getOverviewData(
   const pool = getDatabasePool();
   const [cityRows, dateRows] = await Promise.all([
     readRows(dashboardQueries.cities),
-    pool.query<{ min_date: string | null; max_date: string | null }>("SELECT MIN(collection_date)::text AS min_date, MAX(collection_date)::text AS max_date FROM collections"),
+    cityToday
+      ? range === "all"
+        ? pool.query<{ min_date: string | null; max_date: string | null }>(`
+            SELECT MIN(first_date)::text AS min_date, MAX(last_date)::text AS max_date FROM (
+              SELECT MIN(collection_date) AS first_date, MAX(collection_date) AS last_date FROM collections WHERE city_id = $1
+              UNION ALL
+              SELECT MIN(installation_date), MAX(installation_date) FROM donation_boxes WHERE city_id = $1
+              UNION ALL
+              SELECT MIN(task.task_date), MAX(task.task_date) FROM rider_tasks task
+              JOIN donation_boxes box USING (box_id) WHERE box.city_id = $1
+            ) city_dates`, [city])
+        : null
+      : pool.query<{ min_date: string | null; max_date: string | null }>("SELECT MIN(collection_date)::text AS min_date, MAX(collection_date)::text AS max_date FROM collections"),
   ]);
   const cities = cityRows as CityOption[];
-  city = cities.some((item) => item.city_id === city) ? city : "all";
-  const { startDate, endDate } = getRangeBounds(dateRows.rows[0]?.min_date ?? null, dateRows.rows[0]?.max_date ?? null, range);
-  const parameters = [startDate, endDate, city];
+  const validCity = cities.some((item) => item.city_id === city);
+  const scope = cityToday ? (validCity && city !== "all" ? city : null) : (validCity ? city : "all");
+  const earliestDate = dateRows?.rows[0]?.min_date ?? null;
+  const latestDate = dateRows?.rows[0]?.max_date ?? null;
+  const { startDate, endDate } = getRangeBounds(earliestDate, latestDate ?? cityToday ?? null, range);
+  const parameters = [startDate, endDate, scope];
   const [summaryRows, dailyRows, cityTotalsRows, boxRows, taskRows, recentRows, activityRows] = await Promise.all([
     readRows(`SELECT COUNT(*)::int AS records,
       COUNT(*) FILTER (WHERE collection_status = 'Verified')::int AS verified_count,
@@ -435,11 +458,14 @@ export async function getOverviewData(
     readRows(`SELECT COUNT(*)::int AS boxes,
       COUNT(*) FILTER (WHERE box_status = 'Active')::int AS active_boxes,
       COUNT(*) FILTER (WHERE box_status IN ('Damaged', 'Under Review'))::int AS needs_attention_boxes
-      FROM donation_boxes WHERE ($1 = 'all' OR city_id = $1)`, [city]),
+      FROM donation_boxes WHERE ($3 = 'all' OR city_id = $3)
+        AND (NOT $4::boolean OR installation_date BETWEEN $1::date AND $2::date)`, [...parameters, Boolean(cityToday)]),
     readRows(`SELECT COUNT(*)::int AS tasks,
-      COUNT(*) FILTER (WHERE task_status = 'Completed')::int AS completed_tasks
+      COUNT(*) FILTER (WHERE task_status = 'Completed')::int AS completed_tasks,
+      COUNT(*) FILTER (WHERE task_status IN ('Assigned', 'In Progress'))::int AS open_tasks
       FROM rider_tasks task JOIN donation_boxes box ON box.box_id = task.box_id
-      WHERE ($1 = 'all' OR box.city_id = $1)`, [city]),
+      WHERE ($3 = 'all' OR box.city_id = $3)
+        AND (NOT $4::boolean OR task.task_date BETWEEN $1::date AND $2::date)`, [...parameters, Boolean(cityToday)]),
     readRows(`WITH recent_ids AS (
       SELECT collection_id FROM collections
       WHERE collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR city_id = $3)
@@ -505,7 +531,7 @@ export async function getOverviewData(
   ];
 
   return {
-    range, city, startDate, endDate, cities,
+    range, city: scope ?? "", startDate, endDate, cities,
     totals: {
       verifiedPKR: Number(summary.verified_pkr || 0),
       pendingPKR: Number(summary.pending_pkr || 0),
@@ -517,9 +543,10 @@ export async function getOverviewData(
       needsAttentionBoxes: Number(boxes.needs_attention_boxes || 0),
       tasks: Number(tasks.tasks || 0),
       completedTasks: Number(tasks.completed_tasks || 0),
+      openTasks: Number(tasks.open_tasks || 0),
     },
     chartData,
-    cityData: cities.filter((item) => city === "all" || item.city_id === city)
+    cityData: cities.filter((item) => scope === "all" || item.city_id === scope)
       .map((item) => ({ name: item.city_name, collection: Number(cityTotalsRows.find((record) => record.city_id === item.city_id)?.collection || 0) }))
       .sort((a, b) => b.collection - a.collection),
     statusCounts,

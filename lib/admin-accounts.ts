@@ -135,6 +135,7 @@ export async function isActiveLoginAccount(userId: string): Promise<boolean> {
   `, [userId]);
   return result.rowCount === 1;
 }
+
 export async function createTeamAccount(input: {
   name: string; email: string; phone: string; passwordHash: string; role: TeamRole;
   cityId: string; accountStatus: TeamAccount["accountStatus"];

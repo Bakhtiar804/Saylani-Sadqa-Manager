@@ -1,7 +1,6 @@
-import { createTeamAccount, isActiveLoginAccount } from "@/lib/admin-accounts";
+import { createTeamAccount } from "@/lib/admin-accounts";
 import { hashPassword } from "@/lib/auth";
-import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
-import { cookies } from "next/headers";
+import { getOperationsSession } from "@/lib/operations-auth";
 
 type AdminInput = {
   name: string;
@@ -27,11 +26,8 @@ function isAdminInput(value: unknown): value is AdminInput {
 }
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const session = verifyUserSession(
-    cookieStore.get(SESSION_COOKIE_NAME)?.value,
-  );
-  if (!session || !await isActiveLoginAccount(session.userId) || session.role !== "super_admin") {
+  const session = await getOperationsSession();
+  if (session?.role !== "super_admin") {
     return Response.json({ error: "Super-admin access is required." }, { status: 403 });
   }
 

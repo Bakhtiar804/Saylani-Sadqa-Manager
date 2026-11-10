@@ -1,14 +1,12 @@
 import "server-only";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDashboardRecords } from "@/lib/dashboard-data";
-import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
+import { getOperationsSession } from "@/lib/operations-auth";
 import type { CityOption } from "@/lib/dashboard-types";
 
 async function getSession() {
-  const cookieStore = await cookies();
-  const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  const session = await getOperationsSession();
   if (!session) redirect("/sign-in");
   return session;
 }

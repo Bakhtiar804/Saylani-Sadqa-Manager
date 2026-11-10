@@ -1,9 +1,8 @@
 import "server-only";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDatabasePool } from "@/lib/db";
-import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
+import { getOperationsSession } from "@/lib/operations-auth";
 import type { DataRecord } from "@/lib/dashboard-types";
 
 type RiderProfile = {
@@ -18,17 +17,44 @@ type RiderProfile = {
   employment_status: string;
 };
 
+const taskAssignmentJoin = `
+  LEFT JOIN LATERAL (
+    SELECT audit.actor_user_id, audit.occurred_at AS assigned_at
+    FROM activity_audit_log audit
+    WHERE audit.entity_type = 'rider_task' AND audit.entity_id = task.task_id AND audit.action = 'assigned'
+    ORDER BY audit.occurred_at DESC, audit.audit_id DESC
+    LIMIT 1
+  ) assignment ON true
+  LEFT JOIN users assigner ON assigner.user_id = assignment.actor_user_id
+`;
+
+export async function getRiderTaskNotifications(userId: string) {
+  const { rows } = await getDatabasePool().query<{
+    task_id: string; task_type: string; task_date: string; box_id: string;
+    assigned_by_name: string | null; total: number;
+  }>(`
+    SELECT task.task_id, task.task_type, task.task_date::text AS task_date, task.box_id,
+      assigner.full_name AS assigned_by_name, COUNT(*) OVER ()::int AS total
+    FROM rider_tasks task
+    JOIN riders rider ON rider.rider_id = task.rider_id
+    ${taskAssignmentJoin}
+    WHERE rider.user_id = $1 AND task.task_status = 'Assigned'
+    ORDER BY assignment.assigned_at DESC NULLS LAST, task.task_date DESC, task.task_id DESC
+    LIMIT 10
+  `, [userId]);
+  return { count: rows[0]?.total ?? 0, tasks: rows };
+}
+
 function normalizeRows(rows: Record<string, unknown>[]): DataRecord[] {
   return rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => {
     if (value instanceof Date) return [key, value.toISOString()];
-    if (typeof value === "string" && /(amount|pkr|cash|discrepancy)/i.test(key)) return [key, Number(value)];
+    if (typeof value === "string" && key.endsWith("_pkr")) return [key, Number(value)];
     return [key, value as DataRecord[string]];
   })));
 }
 
 export async function getRiderSession() {
-  const cookieStore = await cookies();
-  const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  const session = await getOperationsSession();
   if (!session) redirect("/sign-in");
   if (session.role !== "rider") redirect("/dashboard");
   return session;
@@ -51,19 +77,21 @@ export async function getRiderDashboard(userId: string) {
 
   const [taskResult, collectionResult, fieldLogResult, summaryResult] = await Promise.all([
     pool.query(`
-      SELECT task.task_id, task.task_date, task.task_type, task.task_status,
+      SELECT task.task_id, task.task_date::text AS task_date, task.task_type, task.task_status,
         task.completion_time, task.notes, box.box_id, box.qr_code, box.area,
         box.location_type, box.location_description, box.box_status,
-        city.city_name, partner.partner_name
+        city.city_name, partner.partner_name, assignment.assigned_at,
+        assigner.full_name AS assigned_by_name
       FROM rider_tasks task
       JOIN donation_boxes box ON box.box_id = task.box_id
       JOIN cities city ON city.city_id = box.city_id
       LEFT JOIN partners partner ON partner.partner_id = box.partner_id
+      ${taskAssignmentJoin}
       WHERE task.rider_id = $1
       ORDER BY task.task_date DESC, task.task_id
     `, [profile.rider_id]),
     pool.query(`
-      SELECT collection_id, collection_date, collection_time, box_id,
+      SELECT collection_id, collection_date::text AS collection_date, collection_time, box_id,
         collection_amount_pkr, collection_status, cash_handover_status,
         deposit_status, discrepancy_amount_pkr, notes
       FROM collections
@@ -72,7 +100,7 @@ export async function getRiderDashboard(userId: string) {
       LIMIT 100
     `, [profile.rider_id]),
     pool.query(`
-      SELECT field_collection_id, collection_date, collection_time, box_id,
+      SELECT field_collection_id, collection_date::text AS collection_date, collection_time, box_id,
         area, location_type, total_cash_counted_pkr, collection_status,
         cash_handover_status, deposit_status, discrepancy_amount_pkr, remarks
       FROM field_collection_logs

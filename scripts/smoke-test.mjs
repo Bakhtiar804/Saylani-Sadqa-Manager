@@ -294,6 +294,20 @@ if (roleFixtures) {
     });
   }
   if (otherCityId && fixtures.city_manager.city_id) {
+    const staleManager = { ...fixtures.city_manager, city_id: otherCityId };
+    checks.push({
+      name: "city manager with a stale session city uses the database assignment",
+      path: "/api/dashboard/admin/collections",
+      status: 200,
+      cookie: sessionCookie(staleManager, secret),
+      expectedCityId: fixtures.city_manager.city_id,
+    });
+    checks.push({
+      name: "obsolete super-admin role cannot widen city manager collection access",
+      path: "/api/dashboard/collections",
+      status: 401,
+      cookie: sessionCookie({ ...fixtures.city_manager, role_key: "super_admin" }, secret),
+    });
     checks.push({
       name: "city manager cannot widen collection reads by requesting another city",
       path: `/api/dashboard/collections?city=${encodeURIComponent(otherCityId)}`,

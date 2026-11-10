@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Brand } from "@/components/landing/brand";
 import Icon from "./icons";
 
@@ -9,7 +10,7 @@ const roleLabels: Record<string, string> = {
   rider: "Rider",
 };
 
-export default function Topbar({ userRole }: { userRole: string }) {
+export default function Topbar({ userRole, notifications }: { userRole: string; notifications?: ReactNode }) {
   return (
     <header className="sticky top-0 z-20 flex h-[68px] items-center justify-between border-b border-[#e7ede5] bg-white/95 px-10 backdrop-blur-xl max-[1100px]:px-6 max-[600px]:h-[60px] max-[600px]:px-4">
       <Link href="/dashboard" className="hidden items-center max-[600px]:flex" aria-label="Saylani Sadqa Manager overview">
@@ -30,6 +31,7 @@ export default function Topbar({ userRole }: { userRole: string }) {
         <span className="hidden text-xs text-[#718073] sm:inline max-[600px]:hidden">
           Saylani Sadqa Manager
         </span>
+        {notifications}
         <form action="/api/auth/logout" method="post">
           <button
             type="submit"

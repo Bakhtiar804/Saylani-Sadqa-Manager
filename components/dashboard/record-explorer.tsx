@@ -48,6 +48,7 @@ export default function RecordExplorer({ title, description, records, columns, s
   const [expanded, setExpanded] = useState("");
   const [remoteRecords, setRemoteRecords] = useState(records);
   const [remoteTotal, setRemoteTotal] = useState(totalRecords ?? records.length);
+  const [reviewRevision, setReviewRevision] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [remoteError, setRemoteError] = useState("");
   const initialRemoteRequestSkipped = useRef(false);
@@ -110,8 +111,15 @@ export default function RecordExplorer({ title, description, records, columns, s
         const response = await fetch(`${remoteEndpoint}?${params}`, { signal: controller.signal, cache: "no-store" });
         const result: { records?: DataRecord[]; totalRecords?: number; error?: string } = await response.json();
         if (!response.ok || !result.records) throw new Error(result.error || "Could not load these records.");
+        if (controller.signal.aborted) return;
+        const total = Number(result.totalRecords) || 0;
+        const lastPage = Math.max(1, Math.ceil(total / pageSize));
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
         setRemoteRecords(result.records);
-        setRemoteTotal(Number(result.totalRecords) || 0);
+        setRemoteTotal(total);
       } catch (error) {
         if (!controller.signal.aborted) setRemoteError(error instanceof Error ? error.message : "Could not load these records.");
       } finally {
@@ -122,7 +130,15 @@ export default function RecordExplorer({ title, description, records, columns, s
       clearTimeout(timer);
       controller.abort();
     };
-  }, [remoteEndpoint, page, query, status, city, from, to, sort]);
+  }, [remoteEndpoint, page, query, status, city, from, to, sort, reviewRevision]);
+
+  function handleCollectionReviewed(recordId: string, nextStatus: string) {
+    if (remoteEndpoint) {
+      setRemoteRecords((current) => current.map((item) => item.collection_id === recordId ? { ...item, collection_status: nextStatus } : item));
+      setReviewRevision((revision) => revision + 1);
+    }
+    router.refresh();
+  }
 
   function toggleSort(key: string) {
     setSort((previous) => ({ key, direction: previous.key === key && previous.direction === "asc" ? "desc" : "asc" }));
@@ -134,12 +150,18 @@ export default function RecordExplorer({ title, description, records, columns, s
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <label className="grid gap-1.5 text-xs font-semibold text-[#536455] sm:col-span-2 xl:col-span-2">Search records<input value={query} onChange={(event) => resetPage(setQuery)(event.target.value)} placeholder="Search IDs, locations, names..." className="h-10 rounded-lg border border-[#dce8dc] px-3 text-sm font-normal text-[#203526] outline-none placeholder:text-[#9aa69a] focus:border-[#276431] focus:ring-2 focus:ring-[#61bb46]/25"/></label>
         {statusKey && <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Status<select value={status} onChange={(event) => resetPage(setStatus)(event.target.value)} className="h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#203526] outline-none focus:border-[#276431] focus:ring-2 focus:ring-[#61bb46]/25"><option value="all">All statuses</option>{statuses.map((item) => <option key={item}>{item}</option>)}</select></label>}
-        {cityKey && <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">City<select value={city} onChange={(event) => resetPage(setCity)(event.target.value)} className="h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#203526] outline-none focus:border-[#276431] focus:ring-2 focus:ring-[#61bb46]/25"><option value="all">All cities</option>{cities.map((item) => <option key={item.city_id} value={item.city_id}>{item.city_name}</option>)}</select></label>}
+        {cityKey && cities.length === 1 && (
+          <div className="grid gap-1.5 text-xs font-semibold text-[#536455]">
+            <span>City</span>
+            <span className="flex h-10 items-center rounded-lg border border-[#dce8dc] bg-[#f4f8f2] px-3 text-sm font-normal text-[#203526]">{cities[0].city_name}</span>
+          </div>
+        )}
+        {cityKey && cities.length > 1 && <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">City<select value={city} onChange={(event) => resetPage(setCity)(event.target.value)} className="h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#203526] outline-none focus:border-[#276431] focus:ring-2 focus:ring-[#61bb46]/25"><option value="all">All cities</option>{cities.map((item) => <option key={item.city_id} value={item.city_id}>{item.city_name}</option>)}</select></label>}
         {dateKey && <div className="grid grid-cols-2 gap-2"><label className="grid gap-1.5 text-xs font-semibold text-[#536455]">From<input type="date" value={from} onChange={(event) => resetPage(setFrom)(event.target.value)} className="h-10 min-w-0 rounded-lg border border-[#dce8dc] px-2 text-xs text-[#203526] outline-none focus:border-[#276431]"/></label><label className="grid gap-1.5 text-xs font-semibold text-[#536455]">To<input type="date" value={to} onChange={(event) => resetPage(setTo)(event.target.value)} className="h-10 min-w-0 rounded-lg border border-[#dce8dc] px-2 text-xs text-[#203526] outline-none focus:border-[#276431]"/></label></div>}
       </div>
     </div>
     {remoteError && <p role="alert" className="mx-4 mt-4 rounded-lg bg-[#fbeceb] p-3 text-sm text-[#913a34]">{remoteError}</p>}
-    <div className="overflow-x-auto" aria-busy={isLoading}><table className="w-full min-w-[800px] border-collapse text-left"><thead className="bg-[#f8faf7]"><tr>{columns.map((column) => <th key={column.key} className="px-4 py-3 text-xs font-bold uppercase tracking-[.06em] text-[#657568]"><button onClick={() => toggleSort(column.key)} className="inline-flex items-center gap-1.5 hover:text-[#276431] focus-visible:outline-2 focus-visible:outline-[#61bb46]">{column.label}<span aria-hidden="true">{sort.key === column.key ? sort.direction === "asc" ? "↑" : "↓" : "↕"}</span></button></th>)}<th className="px-4 py-3 text-xs font-bold uppercase tracking-[.06em] text-[#657568]">Details</th></tr></thead><tbody>{visible.map((record, index) => { const recordId = String(record[columns[0]?.key] ?? `${index}`); const isOpen = expanded === recordId; return <FragmentRow key={recordId} record={record} isOpen={isOpen} columns={columns} onToggle={() => setExpanded(isOpen ? "" : recordId)} cityById={cityById} allowCollectionReview={allowCollectionReview} allowBoxStatusChange={allowBoxStatusChange} onCollectionReviewed={(status) => { setRemoteRecords((current) => current.map((item) => item.collection_id === recordId ? { ...item, collection_status: status } : item)); router.refresh(); }}/>; })}</tbody></table>
+    <div className="overflow-x-auto" aria-busy={isLoading}><table className="w-full min-w-[800px] border-collapse text-left"><thead className="bg-[#f8faf7]"><tr>{columns.map((column) => <th key={column.key} className="px-4 py-3 text-xs font-bold uppercase tracking-[.06em] text-[#657568]"><button onClick={() => toggleSort(column.key)} className="inline-flex items-center gap-1.5 hover:text-[#276431] focus-visible:outline-2 focus-visible:outline-[#61bb46]">{column.label}<span aria-hidden="true">{sort.key === column.key ? sort.direction === "asc" ? "↑" : "↓" : "↕"}</span></button></th>)}<th className="px-4 py-3 text-xs font-bold uppercase tracking-[.06em] text-[#657568]">Details</th></tr></thead><tbody>{visible.map((record, index) => { const recordId = String(record[columns[0]?.key] ?? `${index}`); const isOpen = expanded === recordId; return <FragmentRow key={recordId} record={record} isOpen={isOpen} columns={columns} onToggle={() => setExpanded(isOpen ? "" : recordId)} cityById={cityById} allowCollectionReview={allowCollectionReview} allowBoxStatusChange={allowBoxStatusChange} onCollectionReviewed={(nextStatus) => handleCollectionReviewed(recordId, nextStatus)}/>; })}</tbody></table>
       {visible.length === 0 && <div className="px-6 py-14 text-center"><p className="text-base font-semibold text-[#344639]">No matching records</p><p className="mt-1 text-sm text-[#718073]">Try clearing or adjusting your filters.</p></div>}
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e9efe7] px-5 py-4 text-sm text-[#657568]"><span>Showing {resultCount ? (currentPage - 1) * pageSize + 1 : 0}–{Math.min(currentPage * pageSize, resultCount)} of {resultCount.toLocaleString("en-PK")}</span><div className="flex items-center gap-2"><button disabled={currentPage <= 1 || isLoading} onClick={() => setPage(currentPage - 1)} className="rounded-lg border border-[#dce8dc] px-3 py-2 font-semibold transition hover:bg-[#f4f8f2] disabled:cursor-not-allowed disabled:opacity-40">Previous</button><span className="min-w-16 text-center text-xs">Page {currentPage} / {pageCount}</span><button disabled={currentPage >= pageCount || isLoading} onClick={() => setPage(currentPage + 1)} className="rounded-lg border border-[#dce8dc] px-3 py-2 font-semibold transition hover:bg-[#f4f8f2] disabled:cursor-not-allowed disabled:opacity-40">Next</button></div></div>

@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import AdminShell from "@/components/dashboard/admin-shell";
-import { verifyUserSession, SESSION_COOKIE_NAME } from "@/lib/session";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { isActiveLoginAccount } from "@/lib/admin-accounts";
+import { getOperationsSession } from "@/lib/operations-auth";
+import { getRiderTaskNotifications } from "@/lib/rider-dashboard";
+import RiderNotificationBell from "@/components/dashboard/rider-notification-bell";
 
 export const metadata = {
   title: "Dashboard | Saylani Sadqa Manager",
@@ -15,17 +15,18 @@ export const instant = false;
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   await connection();
-  const cookieStore = await cookies();
-  const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
-  if (!session || !await isActiveLoginAccount(session.userId)) {
+  const session = await getOperationsSession();
+  if (!session) {
     redirect("/sign-in");
   }
+  const notifications = session.role === "rider" ? await getRiderTaskNotifications(session.userId) : null;
 
   return (
     <AdminShell
       canManageAdmins={session.role === "super_admin"}
       userName={session.name}
       userRole={session.role}
+      notifications={notifications && <RiderNotificationBell {...notifications} />}
     >
       {children}
     </AdminShell>

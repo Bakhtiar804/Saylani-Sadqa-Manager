@@ -74,8 +74,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ colle
     const status = body.status as typeof decisions[number];
     await client.query(`
       UPDATE collections
-      SET collection_status = $2, verified_by_user_id = $3, verified_at = CURRENT_TIMESTAMP,
-          notes = CASE WHEN $4 = '' THEN notes ELSE CONCAT_WS(E'\\n', notes, 'Review [' || $2 || ']: ' || $4) END
+      SET collection_status = $2::text, verified_by_user_id = $3, verified_at = CURRENT_TIMESTAMP,
+          notes = CASE WHEN $4 = '' THEN notes ELSE CONCAT_WS(E'\\n', notes, 'Review [' || $2::text || ']: ' || $4) END
       WHERE collection_id = $1
     `, [collectionId, status, session.userId, notes]);
     await client.query(`

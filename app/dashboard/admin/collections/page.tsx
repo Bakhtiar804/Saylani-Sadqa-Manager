@@ -4,6 +4,7 @@ import { getAdminCity, getAdminRecords } from "../admin-data";
 import DemoNotice from "@/components/dashboard/demo-notice";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
+import CityCollectionRegister from "@/components/dashboard/city-collection-register";
 
 export default async function AdminCollectionsPage() {
   await connection();
@@ -14,5 +15,56 @@ export default async function AdminCollectionsPage() {
     getFieldCollectionExplorerPage({ city: cityId, page: 1 }),
     getAdminRecords(["cities"] as const),
   ]);
-  return <><PageHeading eyebrow="Collection operations" title="Collections" description="Review collection and field visit records for your assigned city."/><DemoNotice/><div className="mb-6"><RecordExplorer title="City collection register" description="Review and verify submissions for your assigned city." records={initial.records} totalRecords={initial.totalRecords} remoteEndpoint="/api/dashboard/admin/collections" remoteStatuses={["Verified", "Pending Verification", "Flagged"]} columns={[{ key: "collection_id", label: "Collection ID" }, { key: "collection_date", label: "Date" }, { key: "city_id", label: "City" }, { key: "collection_amount_pkr", label: "Amount" }, { key: "collection_status", label: "Status" }]} statusKey="collection_status" dateKey="collection_date" cities={records?.cities ?? []} allowCollectionReview/></div><RecordExplorer title="Field collection register" description="Supplementary field visit and cash-count records for your assigned city." records={fieldLogs.records} totalRecords={fieldLogs.totalRecords} remoteEndpoint="/api/dashboard/admin/collections/field-logs" remoteStatuses={["Verified", "Pending Verification", "Flagged"]} columns={[{ key: "field_collection_id", label: "Field record" }, { key: "collection_date", label: "Date" }, { key: "city_id", label: "City" }, { key: "total_cash_counted_pkr", label: "Cash counted" }, { key: "collection_status", label: "Status" }]} statusKey="collection_status" dateKey="collection_date" cities={records?.cities ?? []}/></>;
+  const cities = records?.cities ?? [];
+  const statuses = ["Verified", "Pending Verification", "Flagged"];
+
+  return (
+    <>
+      <PageHeading eyebrow="Collection operations" title="Collections" description="Review rider submissions and see field visit details for your city." />
+      <DemoNotice />
+      <CityCollectionRegister
+        collections={
+          <RecordExplorer
+            title="Rider submissions"
+            description="Open a submission to verify or flag it."
+            records={initial.records}
+            totalRecords={initial.totalRecords}
+            remoteEndpoint="/api/dashboard/admin/collections"
+            remoteStatuses={statuses}
+            columns={[
+              { key: "collection_id", label: "Collection ID" },
+              { key: "collection_date", label: "Date" },
+              { key: "city_id", label: "City" },
+              { key: "collection_amount_pkr", label: "Amount" },
+              { key: "collection_status", label: "Status" },
+            ]}
+            statusKey="collection_status"
+            dateKey="collection_date"
+            cities={cities}
+            allowCollectionReview
+          />
+        }
+        fieldVisits={
+          <RecordExplorer
+            title="Field visit details"
+            description="Open a visit to see cash counts, box condition, and seal details."
+            records={fieldLogs.records}
+            totalRecords={fieldLogs.totalRecords}
+            remoteEndpoint="/api/dashboard/admin/collections/field-logs"
+            remoteStatuses={statuses}
+            columns={[
+              { key: "field_collection_id", label: "Field record" },
+              { key: "collection_date", label: "Date" },
+              { key: "city_id", label: "City" },
+              { key: "total_cash_counted_pkr", label: "Cash counted" },
+              { key: "collection_status", label: "Status" },
+            ]}
+            statusKey="collection_status"
+            dateKey="collection_date"
+            cities={cities}
+          />
+        }
+      />
+    </>
+  );
 }

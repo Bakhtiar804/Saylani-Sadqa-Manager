@@ -8,6 +8,7 @@ import RiderAssignmentForm from "@/components/dashboard/rider-assignment-form";
 import { getDashboardRecords } from "@/lib/dashboard-data";
 import { countBy, percent } from "@/lib/analytics";
 import { connection } from "next/server";
+import { getPakistanDate } from "@/lib/task-assignment";
 
 export default async function RidersPage() {
   await connection();
@@ -21,7 +22,7 @@ export default async function RidersPage() {
   return <>
     <PageHeading eyebrow="Field operations" title="Riders & Tasks" description="Review rider coverage and the progress of scheduled collections, verifications, and follow-up tasks."/>
     <DemoNotice/>
-    <RiderAssignmentForm riders={riders} boxes={donationBoxes}/>
+    <RiderAssignmentForm riders={riders} boxes={donationBoxes} today={getPakistanDate()}/>
     <MetricGrid items={[
       { label: "Registered riders", value: riders.length.toLocaleString("en-PK"), note: `${riders.filter((rider) => rider.employment_status === "Active").length} active`, icon: "bike", tone: "blue" },
       { label: "Assigned tasks", value: riderTasks.length.toLocaleString("en-PK"), note: "All task types", icon: "check", tone: "green" },

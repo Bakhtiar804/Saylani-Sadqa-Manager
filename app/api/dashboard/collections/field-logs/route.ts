@@ -1,12 +1,9 @@
-import { cookies } from "next/headers";
 import { getFieldCollectionExplorerPage } from "@/lib/dashboard-data";
-import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
-import { isActiveLoginAccount } from "@/lib/admin-accounts";
+import { getOperationsSession } from "@/lib/operations-auth";
 
 export async function GET(request: Request) {
-  const cookieStore = await cookies();
-  const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
-  if (!session || !await isActiveLoginAccount(session.userId)) {
+  const session = await getOperationsSession();
+  if (!session) {
     return Response.json({ error: "Sign in to view field logs." }, { status: 401 });
   }
   if (session.role === "admin") return Response.json({ error: "Use your city-scoped Admin Dashboard." }, { status: 403 });
