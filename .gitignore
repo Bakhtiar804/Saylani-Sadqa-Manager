@@ -53,3 +53,7 @@ Thumbs.db
 # TypeScript and Next.js generated files
 *.tsbuildinfo
 next-env.d.ts
+
+node_modules/
+node_modules - Copy/
+

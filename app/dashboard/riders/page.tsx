@@ -4,6 +4,7 @@ import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
+import RiderAssignmentForm from "@/components/dashboard/rider-assignment-form";
 import { getDashboardRecords } from "@/lib/dashboard-data";
 import { countBy, percent } from "@/lib/analytics";
 import { connection } from "next/server";
@@ -20,6 +21,7 @@ export default async function RidersPage() {
   return <>
     <PageHeading eyebrow="Field operations" title="Riders & Tasks" description="Review rider coverage and the progress of scheduled collections, verifications, and follow-up tasks."/>
     <DemoNotice/>
+    <RiderAssignmentForm riders={riders} boxes={donationBoxes}/>
     <MetricGrid items={[
       { label: "Registered riders", value: riders.length.toLocaleString("en-PK"), note: `${riders.filter((rider) => rider.employment_status === "Active").length} active`, icon: "bike", tone: "blue" },
       { label: "Assigned tasks", value: riderTasks.length.toLocaleString("en-PK"), note: "All task types", icon: "check", tone: "green" },

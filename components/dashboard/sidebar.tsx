@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Brand } from "@/components/landing/brand";
 import {
   adminDashboardModules,
   cityManagerDashboardModules,
@@ -46,17 +47,14 @@ export default function Sidebar({
     <aside className="fixed inset-y-0 left-0 z-30 flex w-[258px] flex-col border-r border-[#e5ece2] bg-white px-4 py-6 max-[1100px]:w-[220px] max-[900px]:w-[72px] max-[900px]:items-center max-[900px]:px-2 max-[600px]:inset-x-0 max-[600px]:bottom-0 max-[600px]:top-auto max-[600px]:h-[72px] max-[600px]:w-full max-[600px]:flex-row max-[600px]:justify-center max-[600px]:border-r-0 max-[600px]:border-t max-[600px]:px-1 max-[600px]:py-1">
       <Link
         href="/dashboard"
-        className="mb-8 flex items-center gap-2.5 px-2.5 max-[900px]:px-0 max-[600px]:hidden"
+        className="mb-8 flex h-[46px] items-center px-2.5 max-[900px]:justify-center max-[900px]:px-0 max-[600px]:hidden"
         aria-label="Saylani Sadqa Manager overview"
       >
-        <span className="grid size-10 place-items-center rounded-xl bg-[#276431] font-serif text-2xl text-white">
-          س
+        <span className="relative shrink-0 max-[900px]:hidden">
+          <Brand className="w-[190px] object-contain object-left max-[1100px]:w-[165px]" />
         </span>
-        <span className="flex flex-col text-[13px] font-extrabold tracking-[.08em] text-[#192d21]">
-          SAYLANI
-          <small className="mt-0.5 text-[9px] tracking-[.15em] text-[#718073]">
-            SADQA MANAGER
-          </small>
+        <span className="hidden size-10 shrink-0 overflow-hidden max-[900px]:block">
+          <Brand className="w-[177px] max-w-none object-contain object-left" />
         </span>
       </Link>
       <p className="mb-2.5 px-3 text-[11px] font-bold tracking-[.12em] text-[#758375] max-[900px]:hidden">
