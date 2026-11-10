@@ -1,19 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import DashboardSkeleton from "@/components/dashboard/dashboard-skeleton";
 
 export default function NavigationProgress() {
   const [active, setActive] = useState(false);
+  const [showSkeleton, setShowSkeleton] = useState(false);
   const [progress, setProgress] = useState(0);
   const pendingRef = useRef(false);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skeletonTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     function complete() {
       if (!pendingRef.current) return;
       pendingRef.current = false;
       if (resetTimer.current) clearTimeout(resetTimer.current);
+      if (skeletonTimer.current) clearTimeout(skeletonTimer.current);
+      setShowSkeleton(false);
       setProgress(100);
       if (hideTimer.current) clearTimeout(hideTimer.current);
       hideTimer.current = setTimeout(() => setActive(false), 250);
@@ -24,6 +29,8 @@ export default function NavigationProgress() {
       document.querySelectorAll("[data-dashboard-ready]").forEach((node) => node.removeAttribute("data-dashboard-ready"));
       setActive(true);
       setProgress(18);
+      if (skeletonTimer.current) clearTimeout(skeletonTimer.current);
+      skeletonTimer.current = setTimeout(() => setShowSkeleton(true), 180);
       window.requestAnimationFrame(() => setProgress(78));
       if (resetTimer.current) clearTimeout(resetTimer.current);
       resetTimer.current = setTimeout(complete, 30_000);
@@ -74,22 +81,35 @@ export default function NavigationProgress() {
       window.removeEventListener("dashboard:data-ready", handleDataReady);
       if (resetTimer.current) clearTimeout(resetTimer.current);
       if (hideTimer.current) clearTimeout(hideTimer.current);
+      if (skeletonTimer.current) clearTimeout(skeletonTimer.current);
     };
   }, []);
 
   return (
-    <div
-      role="progressbar"
-      aria-label="Loading dashboard content"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={progress}
-      className={`pointer-events-none fixed inset-x-0 top-0 z-[100] h-[3px] transition-opacity duration-200 ${active ? "opacity-100" : "opacity-0"}`}
-    >
+    <>
+      {showSkeleton && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed bottom-0 left-[258px] right-0 top-[68px] z-[90] overflow-y-auto bg-[#f7faf5]/95 px-10 pb-8 pt-8 backdrop-blur-[2px] max-[1100px]:left-[220px] max-[1100px]:px-6 max-[900px]:left-[72px] max-[600px]:bottom-[72px] max-[600px]:left-0 max-[600px]:top-[60px] max-[600px]:px-4 max-[600px]:pt-5"
+        >
+          <div className="mx-auto w-full max-w-[1600px]">
+            <DashboardSkeleton />
+          </div>
+        </div>
+      )}
       <div
-        className="h-full bg-[#61bb46] shadow-[0_0_10px_rgba(97,187,70,.75)] transition-[width] duration-500 ease-out"
-        style={{ width: `${progress}%` }}
-      />
-    </div>
+        role="progressbar"
+        aria-label="Loading dashboard content"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress}
+        className={`pointer-events-none fixed inset-x-0 top-0 z-[100] h-[3px] transition-opacity duration-200 ${active ? "opacity-100" : "opacity-0"}`}
+      >
+        <div
+          className="h-full bg-[#61bb46] shadow-[0_0_10px_rgba(97,187,70,.75)] transition-[width] duration-500 ease-out"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </>
   );
 }

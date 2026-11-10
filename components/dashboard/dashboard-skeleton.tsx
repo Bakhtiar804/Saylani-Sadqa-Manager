@@ -1,6 +1,6 @@
 export default function DashboardSkeleton() {
   return (
-    <main aria-label="Loading dashboard" aria-busy="true" className="animate-pulse space-y-6">
+    <div role="status" aria-label="Loading dashboard" aria-busy="true" className="animate-pulse space-y-6">
       <div className="space-y-3">
         <div className="h-3 w-36 rounded bg-[#e5eee2]" />
         <div className="h-9 w-72 max-w-full rounded-lg bg-[#e5eee2]" />
@@ -17,6 +17,6 @@ export default function DashboardSkeleton() {
         <div className="h-5 w-56 rounded bg-[#e5eee2]" />
         {Array.from({ length: 5 }, (_, index) => <div key={index} className="mt-5 h-10 rounded-lg bg-[#f1f5ef]" />)}
       </div>
-    </main>
+    </div>
   );
 }

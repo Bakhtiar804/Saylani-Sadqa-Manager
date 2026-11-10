@@ -18,7 +18,10 @@ export default async function AnalyticsPage() {
   const partnerValues = partners.map((partner) => ({ name: partner.partner_name, value: sum(verified.filter((record) => record.partner_id === partner.partner_id), "collection_amount_pkr") })).sort((a, b) => b.value - a.value);
   const taskStatuses = countBy(riderTasks, "task_status", ["Completed", "In Progress", "Assigned", "Cancelled"]);
   const costCategories = countBy(operationalCosts, "cost_category");
-  const monthlyCosts = monthlySum(operationalCosts, "month", "cost_amount_pkr").map((item) => ({ ...item, collections: item.collections }));
+  const monthlyCosts = monthlySum(operationalCosts, "month", "cost_amount_pkr").map((item) => ({
+    name: item.label,
+    value: item.collections,
+  }));
   return <>
     <PageHeading eyebrow="Reporting & insights" title="Analytics" description="Explore cross-module collection, task, box, and cost trends with the project’s documented KPI definitions."/>
     <DemoNotice/>

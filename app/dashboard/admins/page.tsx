@@ -1,7 +1,7 @@
 import TeamAccountManagement from "@/components/dashboard/team-account-management";
 import PageHeading from "@/components/dashboard/page-heading";
 import { listTeamAccounts } from "@/lib/admin-accounts";
-import { getDashboardRecords } from "@/lib/dashboard-data";
+import { getCityOptions } from "@/lib/dashboard-data";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -19,8 +19,8 @@ export default async function AdminManagementPage() {
   if (!session) redirect("/sign-in");
   if (session.role !== "super_admin") redirect("/dashboard");
 
-  const [accounts, { cities }] = await Promise.all([
-    listTeamAccounts(session), getDashboardRecords(["cities"] as const),
+  const [accounts, cities] = await Promise.all([
+    listTeamAccounts(session), getCityOptions(),
   ]);
 
   return (

@@ -210,6 +210,10 @@ export async function getDashboardRecords<const Keys extends readonly DatasetKey
   ])) as Pick<DashboardData, Keys[number]>;
 }
 
+export async function getCityOptions(): Promise<CityOption[]> {
+  return await readRows(dashboardQueries.cities) as CityOption[];
+}
+
 export async function getAllRecords(): Promise<DashboardData> {
   return getDashboardRecords(allDatasetKeys) as Promise<DashboardData>;
 }

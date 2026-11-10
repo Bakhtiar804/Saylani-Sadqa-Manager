@@ -16,7 +16,28 @@ VALUES
   ('C002', 'Faisalabad', 'Punjab'),
   ('C003', 'Lahore', 'Punjab'),
   ('C004', 'Hyderabad', 'Sindh'),
-  ('C005', 'Multan', 'Punjab')
+  ('C005', 'Multan', 'Punjab'),
+  ('C006', 'Islamabad', 'Islamabad Capital Territory'),
+  ('C007', 'Rawalpindi', 'Punjab'),
+  ('C008', 'Peshawar', 'Khyber Pakhtunkhwa'),
+  ('C009', 'Quetta', 'Balochistan'),
+  ('C010', 'Gujranwala', 'Punjab'),
+  ('C011', 'Sialkot', 'Punjab'),
+  ('C012', 'Bahawalpur', 'Punjab'),
+  ('C013', 'Sargodha', 'Punjab'),
+  ('C014', 'Sukkur', 'Sindh'),
+  ('C015', 'Larkana', 'Sindh'),
+  ('C016', 'Mardan', 'Khyber Pakhtunkhwa'),
+  ('C017', 'Abbottabad', 'Khyber Pakhtunkhwa'),
+  ('C018', 'Rahim Yar Khan', 'Punjab'),
+  ('C019', 'Dera Ghazi Khan', 'Punjab'),
+  ('C020', 'Gujrat', 'Punjab'),
+  ('C021', 'Sahiwal', 'Punjab'),
+  ('C022', 'Sheikhupura', 'Punjab'),
+  ('C023', 'Jhelum', 'Punjab'),
+  ('C024', 'Mirpur', 'Azad Jammu and Kashmir'),
+  ('C025', 'Muzaffarabad', 'Azad Jammu and Kashmir'),
+  ('C026', 'Gwadar', 'Balochistan')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO users (user_id, full_name, email, phone, city_id, role_id, identity_type, account_status, password_hash)

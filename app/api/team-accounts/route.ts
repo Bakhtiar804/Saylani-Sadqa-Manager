@@ -1,6 +1,7 @@
 import { createTeamAccount, isActiveLoginAccount, listTeamAccounts, softDeleteTeamAccount, TeamAccountDeleteError, type TeamRole } from "@/lib/admin-accounts";
 import { hashPassword } from "@/lib/auth";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
+import { getDatabasePool } from "@/lib/db";
 import { cookies } from "next/headers";
 
 const allowedRoles: Record<string, readonly TeamRole[]> = {
@@ -103,8 +104,12 @@ export async function POST(request: Request) {
   if (password.length < 12 || password.length > 1024) {
     return Response.json({ error: "Passwords must be between 12 and 1024 characters." }, { status: 400 });
   }
-  const cityId = session.role === "super_admin" ? (typeof requestedCity === "string" ? requestedCity.trim() : "") : session.cityId ?? "";
+  const cityId = session.role === "super_admin" || session.role === "admin"
+    ? (typeof requestedCity === "string" ? requestedCity.trim() : "")
+    : session.cityId ?? "";
   if (!cityId) return Response.json({ error: "Select or assign a city before creating this account." }, { status: 400 });
+  const cityExists = await getDatabasePool().query("SELECT 1 FROM cities WHERE city_id = $1", [cityId]);
+  if (cityExists.rowCount === 0) return Response.json({ error: "Choose a valid city." }, { status: 400 });
   if (typeof accountStatus !== "string" || !["active", "inactive", "suspended"].includes(accountStatus)) {
     return Response.json({ error: "Choose a valid account status." }, { status: 400 });
   }
