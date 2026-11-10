@@ -46,6 +46,10 @@ export async function POST(request: Request, context: { params: Promise<{ taskId
       await client.query("ROLLBACK");
       return Response.json({ error: "This task already has a completed collection." }, { status: 409 });
     }
+    if (task.task_status === "Cancelled") {
+      await client.query("ROLLBACK");
+      return Response.json({ error: "Cancelled tasks cannot accept collections." }, { status: 409 });
+    }
     if (task.task_date > getPakistanDate()) {
       await client.query("ROLLBACK");
       return Response.json({ error: "Submit the collection on or after the scheduled date." }, { status: 409 });

@@ -38,9 +38,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ taskI
       await client.query("ROLLBACK");
       return Response.json({ error: "Only active riders can update tasks." }, { status: 403 });
     }
-    if (current.task_status === "Completed") {
+    if (current.task_status === "Completed" || current.task_status === "Cancelled") {
       await client.query("ROLLBACK");
-      return Response.json({ error: "Completed tasks cannot be changed." }, { status: 409 });
+      return Response.json({ error: `${current.task_status} tasks cannot be changed.` }, { status: 409 });
     }
     if (current.task_date > getPakistanDate()) {
       await client.query("ROLLBACK");

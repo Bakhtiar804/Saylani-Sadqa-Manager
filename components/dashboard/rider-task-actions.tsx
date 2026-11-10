@@ -73,6 +73,7 @@ export default function RiderTaskActions({ tasks, canUpdateTasks, today }: { tas
     {(tasks as RiderTask[]).map((task) => {
       const status = statuses.get(task.task_id) ?? task.task_status;
       const isCompleted = status === "Completed";
+      const showActions = canUpdateTasks && !isCompleted && status !== "Cancelled";
       const isSkipped = status === "Skipped";
       const isFutureTask = task.task_date > today;
       const isCollection = task.task_type === "Scheduled Collection";
@@ -86,8 +87,8 @@ export default function RiderTaskActions({ tasks, canUpdateTasks, today }: { tas
         <p className="mt-2 text-xs text-[#657568]">Assigned by {task.assigned_by_name || "Not recorded"}</p>
         {message?.error && <p role="alert" className="mt-4 rounded-lg bg-[#fbeceb] p-3 text-sm text-[#913a34]">{message.error}</p>}
         {message?.success && <p role="status" className="mt-4 rounded-lg bg-[#edf6e9] p-3 text-sm text-[#276431]">{message.success}</p>}
-        {canUpdateTasks && !isCompleted && isFutureTask && <p className="mt-4 rounded-lg bg-[#fff4db] p-3 text-sm text-[#76561a]">Task actions will be available from {formatDate(task.task_date)}.</p>}
-        {canUpdateTasks && !isCompleted && !isFutureTask && <>
+        {showActions && isFutureTask && <p className="mt-4 rounded-lg bg-[#fff4db] p-3 text-sm text-[#76561a]">Task actions will be available from {formatDate(task.task_date)}.</p>}
+        {showActions && !isFutureTask && <>
           <label className="mt-4 grid gap-1.5 text-xs font-semibold text-[#536455]">Field note (optional)<input value={notes[task.task_id] ?? ""} maxLength={500} onChange={(event) => setNotes((current) => ({ ...current, [task.task_id]: event.target.value }))} disabled={busy} placeholder="Add a short visit note" className="h-10 rounded-lg border border-[#dce8dc] px-3 text-sm font-normal text-[#203526]"/></label>
           {!isSkipped && isCollection && (task.box_status === "Active" ? <form onSubmit={(event) => submitCollection(event, task.task_id)} className="mt-4 flex flex-wrap items-end gap-3">
             <label className="grid w-full max-w-xs gap-1.5 text-xs font-semibold text-[#536455]">Amount collected (PKR)<input type="number" min="0.01" max="100000000" step="0.01" required value={amounts[task.task_id] ?? ""} onChange={(event) => setAmounts((current) => ({ ...current, [task.task_id]: event.target.value }))} disabled={busy} placeholder="0.00" className="h-10 rounded-lg border border-[#dce8dc] px-3 text-sm font-normal text-[#203526]"/></label>

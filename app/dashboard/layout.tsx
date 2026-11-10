@@ -26,7 +26,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       canManageAdmins={session.role === "super_admin"}
       userName={session.name}
       userRole={session.role}
-      notifications={notifications && <RiderNotificationBell {...notifications} />}
+      notifications={notifications && <RiderNotificationBell initialNotifications={notifications} />}
     >
       {children}
     </AdminShell>

@@ -5,11 +5,49 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { getRiderTaskNotifications } from "@/lib/rider-dashboard";
 import Icon from "./icons";
 
-export default function RiderNotificationBell({ count, tasks }: Awaited<ReturnType<typeof getRiderTaskNotifications>>) {
+type RiderNotifications = Awaited<ReturnType<typeof getRiderTaskNotifications>>;
+
+export default function RiderNotificationBell({ initialNotifications }: { initialNotifications: RiderNotifications }) {
   const [open, setOpen] = useState(false);
+  const [latest, setLatest] = useState<{ source: RiderNotifications; data: RiderNotifications } | null>(null);
+  const { count, tasks } = latest?.source === initialNotifications ? latest.data : initialNotifications;
   const container = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const panelId = useId();
+
+  useEffect(() => {
+    let request: AbortController | null = null;
+
+    async function refreshNotifications() {
+      if (document.hidden || request) return;
+      const controller = new AbortController();
+      request = controller;
+      try {
+        const response = await fetch("/api/dashboard/rider/notifications", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const data: RiderNotifications = await response.json();
+        if (!controller.signal.aborted) setLatest({ source: initialNotifications, data });
+      } catch {
+        // Keep the last count while the connection is unavailable.
+      } finally {
+        request = null;
+      }
+    }
+
+    void refreshNotifications();
+    const timer = window.setInterval(refreshNotifications, 15_000);
+    window.addEventListener("focus", refreshNotifications);
+    document.addEventListener("visibilitychange", refreshNotifications);
+    return () => {
+      request?.abort();
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshNotifications);
+      document.removeEventListener("visibilitychange", refreshNotifications);
+    };
+  }, [initialNotifications]);
 
   useEffect(() => {
     if (!open) return;
