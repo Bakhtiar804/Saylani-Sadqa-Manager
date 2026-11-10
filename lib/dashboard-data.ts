@@ -199,19 +199,20 @@ type DashboardData = {
 type DatasetKey = keyof DashboardData;
 const allDatasetKeys = Object.keys(dashboardQueries) as DatasetKey[];
 
-export async function getDashboardRecords<const Keys extends readonly DatasetKey[]>(keys: Keys): Promise<Pick<DashboardData, Keys[number]>> {
+async function getDashboardDataset(key: DatasetKey) {
   "use cache";
   cacheLife({ stale: 5, revalidate: 10, expire: 60 });
   cacheTag(DASHBOARD_DATA_CACHE_TAG);
-  const rows = await Promise.all(keys.map((key) => readRows(dashboardQueries[key])));
-  return Object.fromEntries(keys.map((key, index) => [
-    key,
-    key === "cities" ? rows[index] as CityOption[] : rows[index],
-  ])) as Pick<DashboardData, Keys[number]>;
+  return readRows(dashboardQueries[key]);
+}
+
+export async function getDashboardRecords<const Keys extends readonly DatasetKey[]>(keys: Keys): Promise<Pick<DashboardData, Keys[number]>> {
+  const entries = await Promise.all(keys.map(async (key) => [key, await getDashboardDataset(key)] as const));
+  return Object.fromEntries(entries) as Pick<DashboardData, Keys[number]>;
 }
 
 export async function getCityOptions(): Promise<CityOption[]> {
-  return await readRows(dashboardQueries.cities) as CityOption[];
+  return await getDashboardDataset("cities") as CityOption[];
 }
 
 export async function getAllRecords(): Promise<DashboardData> {
@@ -414,36 +415,54 @@ export async function getOverviewData(
   cacheTag(DASHBOARD_DATA_CACHE_TAG);
   range = ["7", "30", "90", "all"].includes(String(range)) ? String(range) : "30";
   const pool = getDatabasePool();
-  const [cityRows, dateRows] = await Promise.all([
-    readRows(dashboardQueries.cities),
+  const [cities, dateRows] = await Promise.all([
+    getCityOptions(),
     pool.query<{ min_date: string | null; max_date: string | null }>("SELECT MIN(collection_date)::text AS min_date, MAX(collection_date)::text AS max_date FROM collections"),
   ]);
-  const cities = cityRows as CityOption[];
   city = cities.some((item) => item.city_id === city) ? city : "all";
   const { startDate, endDate } = getRangeBounds(dateRows.rows[0]?.min_date ?? null, dateRows.rows[0]?.max_date ?? null, range);
   const parameters = [startDate, endDate, city];
-  const [summaryRows, dailyRows, cityTotalsRows, boxRows, taskRows, recentRows, activityRows] = await Promise.all([
-    readRows(`SELECT COUNT(*)::int AS records,
+  const [statsResult, recentRows, activityRows] = await Promise.all([
+    pool.query<{
+      summary: DashboardRecord;
+      daily: DashboardRecord[];
+      city_totals: DashboardRecord[];
+      boxes: DashboardRecord;
+      tasks: DashboardRecord;
+    }>(`
+      WITH summary AS (
+      SELECT COUNT(*)::int AS records,
       COUNT(*) FILTER (WHERE collection_status = 'Verified')::int AS verified_count,
       COUNT(*) FILTER (WHERE collection_status = 'Pending Verification')::int AS pending_count,
       COUNT(*) FILTER (WHERE collection_status = 'Flagged')::int AS flagged_count,
       COALESCE(SUM(collection_amount_pkr) FILTER (WHERE collection_status = 'Verified'), 0) AS verified_pkr,
       COALESCE(SUM(collection_amount_pkr) FILTER (WHERE collection_status = 'Pending Verification'), 0) AS pending_pkr
-      FROM collections WHERE collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR city_id = $3)`, parameters),
-    readRows(`SELECT collection_date::text AS date, SUM(collection_amount_pkr) AS collections
+      FROM collections WHERE collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR city_id = $3)
+      ), daily AS (
+      SELECT collection_date::text AS date, SUM(collection_amount_pkr) AS collections
       FROM collections WHERE collection_status = 'Verified' AND collection_date BETWEEN $1 AND $2
-      AND ($3 = 'all' OR city_id = $3) GROUP BY collection_date ORDER BY collection_date`, parameters),
-    readRows(`SELECT city_id, SUM(collection_amount_pkr) AS collection FROM collections
+      AND ($3 = 'all' OR city_id = $3) GROUP BY collection_date
+      ), city_totals AS (
+      SELECT city_id, SUM(collection_amount_pkr) AS collection FROM collections
       WHERE collection_status = 'Verified' AND collection_date BETWEEN $1 AND $2
-      AND ($3 = 'all' OR city_id = $3) GROUP BY city_id`, parameters),
-    readRows(`SELECT COUNT(*)::int AS boxes,
+      AND ($3 = 'all' OR city_id = $3) GROUP BY city_id
+      ), boxes AS (
+      SELECT COUNT(*)::int AS boxes,
       COUNT(*) FILTER (WHERE box_status = 'Active')::int AS active_boxes,
       COUNT(*) FILTER (WHERE box_status IN ('Damaged', 'Under Review'))::int AS needs_attention_boxes
-      FROM donation_boxes WHERE ($1 = 'all' OR city_id = $1)`, [city]),
-    readRows(`SELECT COUNT(*)::int AS tasks,
+      FROM donation_boxes WHERE ($3 = 'all' OR city_id = $3)
+      ), tasks AS (
+      SELECT COUNT(*)::int AS tasks,
       COUNT(*) FILTER (WHERE task_status = 'Completed')::int AS completed_tasks
       FROM rider_tasks task JOIN donation_boxes box ON box.box_id = task.box_id
-      WHERE ($1 = 'all' OR box.city_id = $1)`, [city]),
+      WHERE ($3 = 'all' OR box.city_id = $3)
+      )
+      SELECT row_to_json(summary) AS summary,
+        (SELECT COALESCE(json_agg(daily), '[]'::json) FROM daily) AS daily,
+        (SELECT COALESCE(json_agg(city_totals), '[]'::json) FROM city_totals) AS city_totals,
+        row_to_json(box_stats) AS boxes, row_to_json(task_stats) AS tasks
+      FROM summary CROSS JOIN boxes AS box_stats CROSS JOIN tasks AS task_stats
+    `, parameters),
     readRows(`WITH recent_ids AS (
       SELECT collection_id FROM collections
       WHERE collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR city_id = $3)
@@ -488,10 +507,8 @@ export async function getOverviewData(
         AND ($3 = 'all' OR inspection.city_id = $3)
     ) activity ORDER BY date DESC LIMIT 6`, parameters),
   ]);
-  const summary = summaryRows[0] ?? {};
-  const boxes = boxRows[0] ?? {};
-  const tasks = taskRows[0] ?? {};
-  const dailyTotals = new Map(dailyRows.map((record) => [String(record.date), Number(record.collections || 0)]));
+  const { summary, boxes, tasks, daily, city_totals: cityTotalsRows } = statsResult.rows[0];
+  const dailyTotals = new Map(daily.map((record) => [String(record.date), Number(record.collections || 0)]));
 
   const chartData = [];
   const cursor = new Date(`${startDate}T00:00:00Z`);

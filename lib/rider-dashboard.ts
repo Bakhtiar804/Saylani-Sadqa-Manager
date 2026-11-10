@@ -1,7 +1,9 @@
 import "server-only";
 
+import { cacheLife, cacheTag } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { DASHBOARD_DATA_CACHE_TAG } from "@/lib/dashboard-data";
 import { getDatabasePool } from "@/lib/db";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 import type { DataRecord } from "@/lib/dashboard-types";
@@ -35,6 +37,10 @@ export async function getRiderSession() {
 }
 
 export async function getRiderDashboard(userId: string) {
+  "use cache";
+  cacheLife({ stale: 5, revalidate: 10, expire: 60 });
+  cacheTag(DASHBOARD_DATA_CACHE_TAG);
+
   const pool = getDatabasePool();
   const profileResult = await pool.query<RiderProfile>(`
     SELECT rider.rider_id, user_record.user_id, user_record.full_name,

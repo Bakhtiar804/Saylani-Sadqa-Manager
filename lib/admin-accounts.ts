@@ -145,12 +145,12 @@ export async function createTeamAccount(input: {
   assignedZone?: string; employmentStatus?: "Active" | "Inactive";
 }): Promise<TeamAccount> {
   const pool = getDatabasePool();
-  const client = await pool.connect();
+  const client = input.role === "rider" ? await pool.connect() : null;
   const userId = `USR-${randomUUID()}`;
   const riderId = `RID-${randomBytes(6).toString("hex")}`;
   try {
-    await client.query("BEGIN");
-    const result = await client.query<QueryResultRow & {
+    if (client) await client.query("BEGIN");
+    const result = await (client ?? pool).query<QueryResultRow & {
       user_id: string; full_name: string; email: string; phone: string; role_key: TeamRole;
       display_name: TeamAccount["role"]; city_id: string; city_name: string;
       account_status: TeamAccount["accountStatus"]; created_at: Date;
@@ -166,13 +166,13 @@ export async function createTeamAccount(input: {
     `, [userId, input.name, input.email.toLowerCase(), input.phone, input.cityId, input.role, input.accountStatus, input.passwordHash]);
     const account = result.rows[0];
     if (!account) throw new Error("Account could not be created. Check that the selected role and city exist.");
-    if (input.role === "rider") {
+    if (client) {
       await client.query(`
         INSERT INTO riders (rider_id, user_id, employment_status, assigned_zone)
         VALUES ($1, $2, $3, $4)
       `, [riderId, userId, input.employmentStatus, input.assignedZone]);
+      await client.query("COMMIT");
     }
-    await client.query("COMMIT");
     revalidateTag("dashboard-db-records", { expire: 0 });
     return {
       id: account.user_id, name: account.full_name, email: account.email, phone: account.phone,
@@ -183,10 +183,10 @@ export async function createTeamAccount(input: {
       createdAt: account.created_at?.toISOString() ?? null,
     };
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (client) await client.query("ROLLBACK");
     throw error;
   } finally {
-    client.release();
+    client?.release();
   }
 }
 

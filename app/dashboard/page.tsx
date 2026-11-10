@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  BreakdownBarChart,
   ChartLegend,
   CollectionTrendChart,
   StatusDonutChart,
@@ -39,6 +38,9 @@ async function DashboardContent({ searchParams }: DashboardPageProps) {
   const taskCompletion = data.totals.tasks
     ? Math.round((data.totals.completedTasks / data.totals.tasks) * 100)
     : 0;
+  const rankedCities = data.cityData.filter(({ collection }) => collection > 0);
+  const otherCities = data.cityData.filter(({ collection }) => collection <= 0);
+  const topCityAmount = rankedCities[0]?.collection ?? 0;
   const metrics: MetricItem[] = [
     {
       label: "Verified collections",
@@ -108,13 +110,42 @@ async function DashboardContent({ searchParams }: DashboardPageProps) {
           title="Collections by city"
           description="Verified PKR totals for the selected period."
         >
-          <BreakdownBarChart
-            data={data.cityData}
-            valueKey="collection"
-            valueFormat="currency"
-            horizontal
-            height={260}
-          />
+          {rankedCities.length > 0 ? (
+            <ol aria-label="Cities ranked by verified collections" className="space-y-3">
+              {rankedCities.map(({ name, collection }, index) => (
+                <li key={name} className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+                  <span className="grid size-8 place-items-center rounded-lg bg-[#edf6e9] text-xs font-semibold tabular-nums text-[#276431]">
+                    {index + 1}
+                  </span>
+                  <div>
+                    <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+                      <span className="font-medium text-[#344639]">{name}</span>
+                      <span className="whitespace-nowrap font-semibold tabular-nums text-[#203526]">{formatPKR(collection)}</span>
+                    </div>
+                    <div aria-hidden="true" className="h-2 overflow-hidden rounded-full bg-[#edf3eb]">
+                      <div className="h-full rounded-full bg-[#36844a]" style={{ width: `${collection / topCityAmount * 100}%` }} />
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="rounded-xl bg-[#f5f8f4] px-4 py-6 text-center text-sm text-[#657568]">
+              No positive verified totals for the selected filters.
+            </p>
+          )}
+          {otherCities.length > 0 && (
+            <details className="mt-4 text-xs text-[#657568]">
+              <summary className="cursor-pointer font-semibold text-[#526552]">{otherCities.length} {otherCities.length === 1 ? "city" : "cities"} with zero or negative totals</summary>
+              <ul className="mt-2 space-y-1.5">
+                {otherCities.map(({ name, collection }) => (
+                  <li key={name} className="flex justify-between gap-3">
+                    <span>{name}</span><span className="tabular-nums">{formatPKR(collection)}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           <div className="mt-5 border-t border-[#edf1eb] pt-3">
             <div className="flex justify-between text-sm text-[#657568]">
               <span>All verified city collections</span>

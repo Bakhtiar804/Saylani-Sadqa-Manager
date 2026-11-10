@@ -14,6 +14,13 @@ export async function getOperationsSession() {
 export function hasValidRequestOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return true;
-  try { return new URL(origin).origin === new URL(request.url).origin; }
-  catch { return false; }
+  try {
+    const requestUrl = new URL(request.url);
+    const host = request.headers.get("host");
+    // Next.js can build request.url with the server's internal hostname.
+    const expectedOrigin = host ? new URL(`${requestUrl.protocol}//${host}`).origin : requestUrl.origin;
+    return origin === expectedOrigin;
+  } catch {
+    return false;
+  }
 }

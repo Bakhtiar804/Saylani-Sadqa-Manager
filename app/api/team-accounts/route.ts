@@ -2,6 +2,7 @@ import { createTeamAccount, isActiveLoginAccount, listTeamAccounts, softDeleteTe
 import { hashPassword } from "@/lib/auth";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 import { getDatabasePool } from "@/lib/db";
+import { hasValidRequestOrigin } from "@/lib/operations-auth";
 import { cookies } from "next/headers";
 
 const allowedRoles: Record<string, readonly TeamRole[]> = {
@@ -22,8 +23,7 @@ export async function DELETE(request: Request) {
   if (!session || !allowedRoles[session.role]) {
     return Response.json({ error: "Team management access is required." }, { status: 403 });
   }
-  const origin = request.headers.get("origin");
-  if (origin && new URL(origin).origin !== new URL(request.url).origin) {
+  if (!hasValidRequestOrigin(request)) {
     return Response.json({ error: "Invalid request origin." }, { status: 403 });
   }
   let input: unknown;
@@ -66,8 +66,7 @@ export async function POST(request: Request) {
   if (!session || !allowedRoles[session.role]) {
     return Response.json({ error: "Team management access is required." }, { status: 403 });
   }
-  const origin = request.headers.get("origin");
-  if (origin && new URL(origin).origin !== new URL(request.url).origin) {
+  if (!hasValidRequestOrigin(request)) {
     return Response.json({ error: "Invalid request origin." }, { status: 403 });
   }
 

@@ -1,5 +1,6 @@
 import { createTeamAccount, isActiveLoginAccount } from "@/lib/admin-accounts";
 import { hashPassword } from "@/lib/auth";
+import { hasValidRequestOrigin } from "@/lib/operations-auth";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 import { cookies } from "next/headers";
 
@@ -35,8 +36,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Super-admin access is required." }, { status: 403 });
   }
 
-  const origin = request.headers.get("origin");
-  if (origin && new URL(origin).origin !== new URL(request.url).origin) {
+  if (!hasValidRequestOrigin(request)) {
     return Response.json({ error: "Invalid request origin." }, { status: 403 });
   }
 
