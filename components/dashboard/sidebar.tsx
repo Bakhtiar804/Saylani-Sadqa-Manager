@@ -44,10 +44,10 @@ export default function Sidebar({
     .join("")
     .toUpperCase();
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 flex w-[258px] flex-col border-r border-[#e5ece2] bg-white px-4 py-6 max-[1100px]:w-[220px] max-[900px]:w-[72px] max-[900px]:items-center max-[900px]:px-2 max-[600px]:inset-x-0 max-[600px]:bottom-0 max-[600px]:top-auto max-[600px]:h-[72px] max-[600px]:w-full max-[600px]:flex-row max-[600px]:justify-center max-[600px]:border-r-0 max-[600px]:border-t max-[600px]:px-1 max-[600px]:py-1">
+    <aside className="fixed inset-y-0 left-0 z-30 flex w-[258px] flex-col overflow-y-auto overscroll-y-contain [scrollbar-width:thin] [scrollbar-color:#61bb46_transparent] border-r border-[#e5ece2] bg-white px-4 py-6 max-[1100px]:w-[220px] max-[900px]:w-[72px] max-[900px]:items-center max-[900px]:px-2 max-[600px]:inset-x-0 max-[600px]:bottom-0 max-[600px]:top-auto max-[600px]:h-[72px] max-[600px]:w-full max-[600px]:flex-row max-[600px]:justify-center max-[600px]:overflow-y-visible max-[600px]:border-r-0 max-[600px]:border-t max-[600px]:px-1 max-[600px]:py-1">
       <Link
         href="/dashboard"
-        className="mb-8 flex h-[46px] items-center px-2.5 max-[900px]:justify-center max-[900px]:px-0 max-[600px]:hidden"
+        className="mb-8 flex h-[46px] shrink-0 items-center px-2.5 max-[900px]:justify-center max-[900px]:px-0 max-[600px]:hidden"
         aria-label="Saylani Sadqa Manager overview"
       >
         <span className="relative shrink-0 max-[900px]:hidden">
@@ -62,7 +62,7 @@ export default function Sidebar({
       </p>
       <nav
         aria-label="Main navigation"
-        className="grid w-full gap-1 max-[900px]:w-full max-[600px]:flex max-[600px]:max-w-[760px] max-[600px]:justify-start max-[600px]:overflow-x-auto"
+        className="grid w-full shrink-0 gap-1 max-[900px]:w-full max-[600px]:flex max-[600px]:max-w-[760px] max-[600px]:shrink max-[600px]:justify-start max-[600px]:overflow-x-auto"
       >
         {modules.map((item) => {
           const active =
@@ -106,7 +106,7 @@ export default function Sidebar({
           </Link>
         )}
       </nav>
-      <div className="mt-auto w-full max-[600px]:hidden">
+      <div className="mt-auto w-full shrink-0 max-[600px]:hidden">
         <div className="mb-4 rounded-[13px] border border-[#e3eddf] bg-gradient-to-br from-[#f4f9f0] to-[#fbfdf9] p-3.5 max-[900px]:hidden">
           <span className="mb-3 grid size-[28px] place-items-center rounded-lg bg-[#e4f2dc] text-lg text-[#276431]">
             ✳

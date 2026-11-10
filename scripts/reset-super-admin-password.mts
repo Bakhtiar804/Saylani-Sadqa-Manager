@@ -1,14 +1,13 @@
 import { scrypt, randomBytes } from "node:crypto";
-import { promisify } from "node:util";
 import nextEnv from "@next/env";
-const { loadEnvConfig } = nextEnv;
-import pg from "pg";
+import pg, { type PoolConfig } from "pg";
 
+const { loadEnvConfig } = nextEnv;
 const { Pool } = pg;
 
 loadEnvConfig(process.cwd());
 
-function databaseConfig() {
+function databaseConfig(): PoolConfig {
   const connectionString = process.env.DATABASE_URL?.trim();
   if (connectionString) {
     const url = new URL(connectionString);
@@ -36,7 +35,7 @@ function databaseConfig() {
   };
 }
 
-function readHiddenPassword() {
+function readHiddenPassword(): Promise<string> {
   if (!process.stdin.isTTY || typeof process.stdin.setRawMode !== "function") {
     throw new Error("Run this command directly in a terminal so the password can be entered privately.");
   }
@@ -52,7 +51,7 @@ function readHiddenPassword() {
       process.stdin.removeListener("data", onData);
       process.stdout.write("\n");
     };
-    const onData = (chunk) => {
+    const onData = (chunk: string) => {
       for (const character of chunk) {
         if (character === "\u0003") {
           cleanup();
@@ -78,7 +77,7 @@ function readHiddenPassword() {
 async function main() {
   const email = process.argv[2]?.trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error("Usage: node scripts/reset-super-admin-password.mjs superadmin@example.com");
+    throw new Error("Usage: npm run reset:super-admin-password -- superadmin@example.com");
   }
 
   const password = await readHiddenPassword();
@@ -87,13 +86,17 @@ async function main() {
   }
 
   const salt = randomBytes(16);
-  const deriveKey = promisify(scrypt);
-  const key = await deriveKey(password, salt, 64, { maxmem: 128 * 1024 * 1024 });
-  const encodedHash = `${salt.toString("base64url")}.${Buffer.from(key).toString("base64url")}`;
+  const key = await new Promise<Buffer>((resolve, reject) => {
+    scrypt(password, salt, 64, { maxmem: 128 * 1024 * 1024 }, (error, derivedKey) => {
+      if (error) reject(error);
+      else resolve(derivedKey);
+    });
+  });
+  const encodedHash = `${salt.toString("base64url")}.${key.toString("base64url")}`;
 
   const pool = new Pool({ ...databaseConfig(), connectionTimeoutMillis: 10_000, max: 1 });
   try {
-    const result = await pool.query(
+    const result = await pool.query<{ account_status: string }>(
       `UPDATE public.users AS u
        SET password_hash = $1
        FROM public.roles AS r

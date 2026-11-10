@@ -75,6 +75,10 @@ export async function softDeleteTeamAccount(input: {
   const allowedTargets = deleteRoles[input.actor.role];
   if (!allowedTargets) throw new TeamAccountDeleteError("You cannot delete team accounts.", 403);
 
+  if (input.userId === input.actor.userId) {
+    throw new TeamAccountDeleteError("You cannot delete your own account.", 403);
+  }
+
   const client = await getDatabasePool().connect();
   let transactionOpen = false;
   try {

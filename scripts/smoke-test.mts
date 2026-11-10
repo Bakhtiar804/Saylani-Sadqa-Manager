@@ -1,11 +1,39 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { existsSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import nextEnv from "@next/env";
-import pg from "pg";
+import pg, { type PoolConfig } from "pg";
+
+const roles = ["super_admin", "admin", "city_manager", "rider"] as const;
+type Role = (typeof roles)[number];
+
+type Account = {
+  user_id: string;
+  full_name: string;
+  email: string;
+  city_id: string | null;
+  role_key: Role;
+};
+
+type SmokeCheck = {
+  name: string;
+  path: string;
+  status: number;
+  location?: string;
+  method?: string;
+  body?: Record<string, unknown>;
+  cookie?: string;
+  expectedCityId?: string;
+};
+
+function errorCode(error: unknown) {
+  return error && typeof error === "object" && "code" in error && typeof error.code === "string"
+    ? error.code
+    : undefined;
+}
 
 const { loadEnvConfig } = nextEnv;
 const { Pool } = pg;
@@ -15,7 +43,7 @@ loadEnvConfig(projectRoot);
 const baseUrl = (process.argv[2] ?? "http://127.0.0.1:3100").replace(/\/$/, "");
 const base = new URL(baseUrl);
 
-function databaseConfig() {
+function databaseConfig(): PoolConfig {
   const connectionString = process.env.DATABASE_URL?.trim();
   if (connectionString) {
     const url = new URL(connectionString);
@@ -40,7 +68,7 @@ async function getRoleFixtures() {
   if (!secret) throw new Error("AUTH_SECRET is required for role-access smoke checks.");
   const pool = new Pool({ ...databaseConfig(), connectionTimeoutMillis: 8000, max: 2 });
   try {
-    const result = await pool.query(`
+    const result = await pool.query<Account>(`
       SELECT DISTINCT ON (role.role_key)
         user_record.user_id, user_record.full_name, user_record.email,
         user_record.city_id, role.role_key
@@ -58,13 +86,14 @@ async function getRoleFixtures() {
         EXISTS (SELECT 1 FROM collections WHERE collections.city_id = user_record.city_id) DESC,
         user_record.created_at DESC, user_record.user_id
     `);
-    const fixtures = Object.fromEntries(result.rows.map((row) => [row.role_key, row]));
-    const missing = ["super_admin", "admin", "city_manager", "rider"].filter((role) => !fixtures[role]);
+    const accounts = new Map(result.rows.map((row) => [row.role_key, row]));
+    const missing = roles.filter((role) => !accounts.has(role));
     if (missing.length) {
       console.log(`SKIP signed-in role checks; no active database fixture for: ${missing.join(", ")}.`);
       return null;
     }
-    const otherCity = await pool.query(
+    const fixtures = Object.fromEntries(accounts) as Record<Role, Account>;
+    const otherCity = await pool.query<{ city_id: string }>(
       "SELECT city_id FROM cities WHERE city_id <> $1 ORDER BY city_id LIMIT 1",
       [fixtures.city_manager.city_id],
     );
@@ -74,7 +103,7 @@ async function getRoleFixtures() {
   }
 }
 
-function sessionCookie(account, secret) {
+function sessionCookie(account: Account, secret: string) {
   const payload = Buffer.from(JSON.stringify({
     userId: account.user_id,
     email: account.email,
@@ -119,7 +148,7 @@ async function startLocalServer() {
   throw new Error(`Could not start the production server at ${baseUrl}. Check the build and port, then retry.`);
 }
 
-let ownedServer = null;
+let ownedServer: ChildProcess | null = null;
 try {
   if (!await responds()) {
     console.log(`No server found at ${baseUrl}; starting the local production build for this run.`);
@@ -130,7 +159,7 @@ try {
   process.exit(1);
 }
 
-const checks = [
+const checks: SmokeCheck[] = [
   { name: "landing page", path: "/", status: 200 },
   { name: "sign-in page", path: "/sign-in", status: 200 },
   { name: "legacy login redirect", path: "/login", status: 307, location: "/sign-in" },
@@ -164,12 +193,12 @@ const checks = [
   { name: "logout clears session and redirects", path: "/api/auth/logout", status: 303, method: "POST", location: "/sign-in" },
 ];
 
-let roleFixtures = null;
+let roleFixtures: Awaited<ReturnType<typeof getRoleFixtures>> = null;
 if (["127.0.0.1", "localhost", "::1"].includes(base.hostname)) {
   try {
     roleFixtures = await getRoleFixtures();
   } catch (error) {
-    console.log(`SKIP signed-in role checks: ${error.code ?? error.message}`);
+    console.log(`SKIP signed-in role checks: ${errorCode(error) ?? (error instanceof Error ? error.message : String(error))}`);
   }
 } else {
   console.log("SKIP signed-in role checks for non-local URLs to avoid sending test sessions off-device.");
@@ -204,7 +233,7 @@ if (roleFixtures) {
     ["rider", "/dashboard/rider", 200],
     ["rider", "/dashboard/rider/collections", 200],
     ["rider", "/dashboard/rider/tasks", 200],
-  ];
+  ] as const;
   for (const [role, path, status] of roleRouteChecks) {
     const fixtureRole = role === "manager" ? "city_manager" : role;
     checks.push({
@@ -219,7 +248,7 @@ if (roleFixtures) {
     ["admin", "/dashboard/users", "/dashboard/admin"],
     ["city_manager", "/dashboard/admin/team", "/dashboard/manager"],
     ["rider", "/dashboard/admins", "/dashboard/rider"],
-  ];
+  ] as const;
   for (const [role, path, location] of redirectChecks) {
     checks.push({
       name: `${role} restricted page ${path}`,
@@ -230,7 +259,7 @@ if (roleFixtures) {
     });
   }
 
-  for (const role of ["super_admin", "admin", "city_manager"]) {
+  for (const role of ["super_admin", "admin", "city_manager"] as const) {
     checks.push({
       name: `${role} can view eligible team accounts`,
       path: "/api/team-accounts",
@@ -245,7 +274,7 @@ if (roleFixtures) {
     cookie: sessionCookie(fixtures.rider, secret),
   });
 
-  for (const role of ["super_admin", "city_manager"]) {
+  for (const role of ["super_admin", "city_manager"] as const) {
     checks.push({
       name: `${role} generic collections API access`,
       path: "/api/dashboard/collections",
@@ -253,7 +282,7 @@ if (roleFixtures) {
       cookie: sessionCookie(fixtures[role], secret),
     });
   }
-  for (const role of ["admin", "rider"]) {
+  for (const role of ["admin", "rider"] as const) {
     checks.push({
       name: `${role} blocked from generic collections API`,
       path: "/api/dashboard/collections",
@@ -261,7 +290,7 @@ if (roleFixtures) {
       cookie: sessionCookie(fixtures[role], secret),
     });
   }
-  for (const role of ["super_admin", "city_manager"]) {
+  for (const role of ["super_admin", "city_manager"] as const) {
     checks.push({
       name: `${role} generic field-log API access`,
       path: "/api/dashboard/collections/field-logs",
@@ -269,7 +298,7 @@ if (roleFixtures) {
       cookie: sessionCookie(fixtures[role], secret),
     });
   }
-  for (const role of ["admin", "rider"]) {
+  for (const role of ["admin", "rider"] as const) {
     checks.push({
       name: `${role} blocked from generic field-log API`,
       path: "/api/dashboard/collections/field-logs",
@@ -277,7 +306,7 @@ if (roleFixtures) {
       cookie: sessionCookie(fixtures[role], secret),
     });
   }
-  for (const role of ["admin", "city_manager"]) {
+  for (const role of ["admin", "city_manager"] as const) {
     checks.push({
       name: `${role} city-scoped collections API access`,
       path: "/api/dashboard/admin/collections",
@@ -285,7 +314,7 @@ if (roleFixtures) {
       cookie: sessionCookie(fixtures[role], secret),
     });
   }
-  for (const role of ["admin", "city_manager"]) {
+  for (const role of ["admin", "city_manager"] as const) {
     checks.push({
       name: `${role} city-scoped field-log API access`,
       path: "/api/dashboard/admin/collections/field-logs",
@@ -309,7 +338,7 @@ if (roleFixtures) {
       expectedCityId: fixtures.city_manager.city_id,
     });
   }
-  for (const role of ["super_admin", "rider"]) {
+  for (const role of ["super_admin", "rider"] as const) {
     checks.push({
       name: `${role} blocked from city-scoped collections API`,
       path: "/api/dashboard/admin/collections",
@@ -317,7 +346,7 @@ if (roleFixtures) {
       cookie: sessionCookie(fixtures[role], secret),
     });
   }
-  for (const role of ["super_admin", "rider"]) {
+  for (const role of ["super_admin", "rider"] as const) {
     checks.push({
       name: `${role} blocked from city-scoped field-log API`,
       path: "/api/dashboard/admin/collections/field-logs",
@@ -326,7 +355,7 @@ if (roleFixtures) {
     });
   }
 
-  for (const role of ["super_admin", "admin", "city_manager", "rider"]) {
+  for (const role of roles) {
     checks.push({
       name: `${role} cannot delete own account through team API`,
       path: "/api/team-accounts",
@@ -337,9 +366,9 @@ if (roleFixtures) {
     });
   }
 
-  for (const [role, targetRole] of [["admin", "admin"], ["city_manager", "city_manager"]]) {
+  for (const role of ["admin", "city_manager"] as const) {
     checks.push({
-      name: `${role} cannot create a ${targetRole}`,
+      name: `${role} cannot create a ${role}`,
       path: "/api/team-accounts",
       status: 403,
       method: "POST",
@@ -348,7 +377,7 @@ if (roleFixtures) {
         phone: "+923001234567",
         email: `role-access-${role}@example.invalid`,
         password: "not-a-real-account-password",
-        role: targetRole,
+        role,
         cityId: fixtures[role].city_id,
       },
       cookie: sessionCookie(fixtures[role], secret),
@@ -389,21 +418,23 @@ for (const check of checks) {
     if (check.expectedCityId && response.ok) {
       const body = await response.json();
       bodyCheckPassed = Array.isArray(body.records) && body.records.length > 0 &&
-        body.records.every((record) => record.city_id === check.expectedCityId);
+        body.records.every((record: { city_id: string }) => record.city_id === check.expectedCityId);
     }
     const passed = response.status === check.status && (!check.location || locationPath === check.location) && bodyCheckPassed;
     console.log(`${passed ? "PASS" : "FAIL"} ${check.name}: HTTP ${response.status}${locationPath ? ` -> ${locationPath}` : ""}`);
     if (!passed) failures += 1;
   } catch (error) {
-    console.log(`FAIL ${check.name}: ${error.cause?.code ?? error.message}`);
+    const message = error instanceof Error ? errorCode(error.cause) ?? error.message : String(error);
+    console.log(`FAIL ${check.name}: ${message}`);
     failures += 1;
   }
 }
 
 console.log(`\n${checks.length - failures}/${checks.length} smoke checks passed.`);
 if (ownedServer) {
+  const server = ownedServer;
   ownedServer.kill("SIGTERM");
-  await Promise.race([new Promise((resolveExit) => ownedServer.once("exit", resolveExit)), delay(3000)]);
+  await Promise.race([new Promise((resolveExit) => server.once("exit", resolveExit)), delay(3000)]);
   if (ownedServer.exitCode === null) ownedServer.kill("SIGKILL");
 }
 if (failures) process.exitCode = 1;
