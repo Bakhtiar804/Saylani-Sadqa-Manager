@@ -3,7 +3,7 @@
 ## Result
 
 Production build, TypeScript, ESLint, hydration regressions, workbook/database
-reconciliation, import integration tests, 39 smoke checks and 120 isolated
+reconciliation, import integration tests, 39 smoke checks and 123 isolated
 full-flow HTTP checks passed.
 
 The landing city chart now uses horizontal segmented cells. Desktop and
@@ -11,11 +11,26 @@ The landing city chart now uses horizontal segmented cells. Desktop and
 Its figures remain explicitly illustrative; authenticated reports use the
 imported source data.
 
-The network screen now has a connected city root, area branches and expandable
-box nodes, with searchable city selection. Leaderboards use a responsive winners
+The network screen uses circular city, area and box nodes joined by straight
+SVG edges, matching the supplied tree reference in the project theme. It has
+searchable city selection, clickable details, area collapse/expand, zoom,
+padding-aware fit and scroll controls. Its nodes come from the scoped PostgreSQL
+tree query. Leaderboards use a responsive winners
 podium, champion ribbon and compact ranking rows. The Victory Bar uses the
 green/gold theme and proportional collection bars. Source tables are secondary
 disclosures on overview, analytics and coverage screens.
+
+When monthly source reports exist without individual box registrations, the tree
+shows city → Public/Branch collection channels → reported box-count aggregates.
+Collection totals use the selected year/channel, matching the report filters;
+box counts remain the selected latest-month snapshot. Selecting a channel shows
+its exact collection amount, reported count and source-row count. These aggregate
+nodes are not individual box IDs or invented area records.
+
+Real-data browser verification for Faisalabad showed PKR 160,965,499 for 2026,
+with 8,878 reported boxes in September: 8,801 public and 77 branch boxes. Inventory
+now shows the imported reported network count separately from registered IDs;
+zero registered boxes no longer produces NaN% or a demo-city label.
 
 City rankings drill down to district rankings. City/Branch Admins are restricted
 to their own city's districts. The nullable district column and index migration
@@ -52,14 +67,18 @@ inclusive date filters, stale sessions, deletion with retained history, Excel
 preview/apply/fingerprint/idempotency, role pages and logout. Expanded checks
 cover flag → record → locked transitions, review audit history and foreign-city
 denial, simultaneous duplicate cash submissions, box status history, and all
-main City/Branch/Rider workspace pages. The expanded 120-check run also verifies
+main City/Branch/Rider workspace pages. The expanded flow also verifies
 district persistence, edits and foreign-city/role denial, district totals and
-authenticated leaderboard scope.
+authenticated leaderboard scope. The 121-check run confirms that a newly
+registered database box renders in its city's area/box tree and that the foreign
+city's box does not appear. Browser review used the same isolated database
+fixtures to inspect the populated circular graph and selected box details.
 
 `npm run test:visual` checks podium order and empty states, public partner totals
 across locations/cities, installed boxes, recorded partner attribution, legacy
 box-link fallback, published-only amounts, tree hydration, city
-switching, box expansion and missing-area states. Browser checks cover the
+switching, node details, branch collapse/expand, zoom/fit, edge endpoints,
+non-overlapping node geometry and missing-area states. Browser checks cover the
 desktop podium/Victory Bar, city search and mobile podium layout.
 
 The public partner page renders the Victory Bar, all three podium positions,
@@ -86,6 +105,27 @@ One expanded run encountered a temporary database connection timeout. Its
 interrupted fixture schema was inspected and removed; the complete repeat run
 passed all 113 HTTP checks and completed its normal cleanup. The timeout was
 not counted as a successful check.
+
+## City Admin account creation regression
+
+Live database diagnostics found `city_admin` and `branch_admin` role keys, while
+account creation only looked up `admin` and `city_manager`. This produced a null
+role ID and the `users_identity_auth_check` rejection. Creation now resolves both
+naming schemes, account listing normalizes both labels, and scoped deletion
+recognizes Branch Admin aliases. Login/session normalization remains consistent.
+The legacy City Admin endpoint also validates that its selected city exists.
+
+`npm run test:accounts` passed 43 isolated HTTP checks covering actual password
+login, both role naming schemes, City/Branch/Rider provisioning, account listing,
+duplicate email, legacy endpoint, invalid city, scoped deletion and permissions.
+Fixtures were removed and live public record snapshots were preserved. The full
+expanded run passed its account phase but later encountered a database connection
+timeout; it was not counted as a completed full-flow run, and its interrupted
+test schema was inspected and removed before the focused repeat.
+
+The default flow fixtures now include the live-style role keys and test canonical
+compatibility as well. `FLOW_ROLE_KEYS=canonical` retains an explicit canonical
+fixture mode.
 
 ## Limits
 

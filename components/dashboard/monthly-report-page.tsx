@@ -37,7 +37,7 @@ export default async function MonthlyReportPage({searchParams,view='overview'}: 
   const branchRows = data.collections.filter(row=>row.channel==='branch');
   const tableRows = data.collections.map(row=>({...row,channel:row.channel==='public'?'Public':'Branch',
     amount_state:row.amount_pkr===null?'Not reported':'Reported'}));
-  const tree = view==='coverage' ? await getNetworkTree(scope,{cityId:data.cityId,month:data.latestMonth,channel:data.channel}) : null;
+  const tree = view==='coverage' ? await getNetworkTree(scope,{cityId:data.cityId,month:data.latestMonth,channel:data.channel,year:data.year}) : null;
   return <>
     <PageHeading eyebrow={`${cityName} · ${period}`} title={titles[view]} description="Actual monthly figures supplied · Public & branch reporting." actions={view==='coverage'?<Link href={`${base}/inventory`} className="rounded-xl bg-[#276431] px-4 py-3 text-sm font-semibold text-white">Open box inventory →</Link>:undefined}/>
     <form className="mb-6 flex flex-wrap items-end gap-3 rounded-2xl border border-[#e3ebe0] bg-white p-4">
@@ -53,7 +53,7 @@ export default async function MonthlyReportPage({searchParams,view='overview'}: 
       {data.totals.missingAmounts+data.totals.missingExpenses>0 && <span className="block font-semibold">Selected reports: {data.totals.missingAmounts} collection amounts and {data.totals.missingExpenses} expense amounts are not reported. Totals show available amounts.</span>}
     </div></details>
     {noData && !tree?.some(city=>city.registeredBoxes>0) ? <section className="rounded-2xl border border-[#e3ebe0] bg-white p-8 text-center"><h2 className="text-lg font-bold">No source reports for this selection</h2><p className="mt-2 text-sm text-[#657568]">Choose another year or city. No figures have been estimated.</p></section> : <>
-      {tree && <NetworkTree cities={tree}/>}
+      {tree && <NetworkTree cities={tree} inventoryHref={`${base}/inventory`}/>}
       {view==='expenses' ? <MetricGrid items={[
         {label:'Operational cost',value:amountLabel(data.expenses,data.totals.expenses),note:'Fuel, salary and other recorded operating expenses',icon:'cash',tone:'orange'},
         {label:'Expense categories',value:data.categories.length,note:'As supplied in the workbook',icon:'chart',tone:'blue'},

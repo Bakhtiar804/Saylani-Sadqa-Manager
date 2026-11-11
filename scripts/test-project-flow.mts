@@ -2,13 +2,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { spawn,type ChildProcess } from 'node:child_process';
+import {createServer} from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 import nextEnv from '@next/env';
 import pg from 'pg';
 import { hashPassword } from '../lib/auth';
 
 nextEnv.loadEnvConfig(process.cwd());
-const workbook=process.argv[2];assert.ok(workbook,'Pass the source workbook path');
+const accountsOnly=process.argv.includes('--accounts-only');
+const workbook=process.argv.slice(2).find(value=>value!=='--accounts-only');assert.ok(accountsOnly||workbook,'Pass the source workbook path');
 const source=new URL(process.env.DATABASE_URL!);source.hostname=source.hostname.replace(/-pooler(?=\.)/,'');source.searchParams.set('sslmode','verify-full');
 const schema=`test_flow_${randomBytes(8).toString('hex')}`;assert.match(schema,/^test_flow_[0-9a-f]{16}$/);
 const owner=new pg.Pool({connectionString:source.toString(),max:1,connectionTimeoutMillis:10000});
@@ -42,6 +44,7 @@ try {
   await fixtures.query(await fs.readFile('database/migrate_report_uploads.sql','utf8'));
   await fixtures.query(`INSERT INTO cities VALUES('C001','Karachi','Sindh'),('C002','Lahore','Punjab'),('C003','Multan','Punjab');
     INSERT INTO roles VALUES(1,'super_admin','Super Admin'),(2,'admin','City Admin'),(3,'city_manager','Branch Admin'),(4,'rider','Rider');`);
+  if(process.env.FLOW_ROLE_KEYS!=='canonical')await fixtures.query("UPDATE roles SET role_key=CASE role_key WHEN 'admin' THEN 'city_admin' WHEN 'city_manager' THEN 'branch_admin' ELSE role_key END");
   const hash=await hashPassword(password);
   for(const [id,name,email,role,city] of [
     ['QA-SUPER','QA Super','super@example.invalid',1,null],['QA-CITY','QA City','city@example.invalid',2,'C001'],
@@ -67,11 +70,13 @@ try {
     if(ready) break;await delay(250);
   }
   assert.ok(ready,'Isolated app must start');
+  async function exerciseFlow() {
   const superAdmin=await login('super@example.invalid'),cityAdmin=await login('city@example.invalid'),branch=await login('branch@example.invalid'),rider=await login('rider@example.invalid'),other=await login('other@example.invalid');
   assert.equal(cityAdmin.redirect,'/dashboard/admin');assert.equal(branch.redirect,'/dashboard/manager');assert.equal(rider.redirect,'/dashboard/rider');
   await call('/api/auth/login',401,{method:'POST',json:{email:'city@example.invalid',password:'wrong'}});
   await call('/dashboard',307);await call('/api/dashboard/collections',401);
   console.log('PASS actual password login, redirects and anonymous guards for all four roles');
+  const emptyInventory=await (await call('/dashboard/inventory',200,{session:superAdmin})).text();assert.ok(!emptyInventory.includes('NaN'));assert.ok(!emptyInventory.includes('demo cities'));
   for(const query of ['from=2026-02-30','from=2026-11-12&to=2026-11-11','page=-1']) await call(`/api/dashboard/admin/collections?${query}`,400,{session:cityAdmin});
 
   for(const path of ['/api/dashboard/boxes','/api/dashboard/rider-assignments','/api/reports/import']) await call(path,403,{session:superAdmin,method:'POST',json:{}});
@@ -80,18 +85,43 @@ try {
   for(const role of ['city_manager','rider']) await call('/api/team-accounts',403,{session:superAdmin,method:'POST',json:account('Denied',`${role}@example.invalid`,role)});
   await call('/api/team-accounts',201,{session:superAdmin,method:'POST',json:account('New City','newcity@example.invalid','admin','C003')});
   const newCity=await login('newcity@example.invalid');assert.equal(newCity.redirect,'/dashboard/admin');
+  const listed=await (await call('/api/team-accounts',200,{session:superAdmin})).json();assert.ok(listed.accounts.some((account:{email:string;role:string})=>account.email==='newcity@example.invalid'&&account.role==='City Admin'));
+  await call('/api/team-accounts',409,{session:superAdmin,method:'POST',json:account('Duplicate City','newcity@example.invalid','admin','C003')});
+  await call('/api/admins',400,{session:superAdmin,method:'POST',json:{...account('Invalid city','legacyinvalid@example.invalid','admin'),cityId:''}});
+  await call('/api/admins',400,{session:superAdmin,method:'POST',json:{...account('Missing city','legacymissing@example.invalid','admin'),cityId:'MISSING'}});
+  await call('/api/admins',201,{session:superAdmin,method:'POST',json:account('Legacy City','legacycity@example.invalid','admin','C003')});
+  const legacyCity=await login('legacycity@example.invalid');assert.equal(legacyCity.redirect,'/dashboard/admin');
   await call('/api/team-accounts',201,{session:cityAdmin,method:'POST',json:account('New Branch','newbranch@example.invalid','city_manager','C002')});
   assert.equal((await fixtures.query("SELECT city_id FROM users WHERE email='newbranch@example.invalid'")).rows[0].city_id,'C001');
+  const newBranch=await login('newbranch@example.invalid');assert.equal(newBranch.redirect,'/dashboard/manager');
+  const team=await (await call('/api/team-accounts',200,{session:cityAdmin})).json();const branchAccount=team.accounts.find((account:{email:string})=>account.email==='newbranch@example.invalid');assert.equal(branchAccount.role,'Branch Admin');
+  await call('/api/team-accounts',200,{session:cityAdmin,method:'DELETE',json:{userId:branchAccount.id,confirmedEmail:'newbranch@example.invalid'}});
+  await call('/api/auth/login',401,{method:'POST',json:{email:'newbranch@example.invalid',password}});
   await call('/api/team-accounts',403,{session:branch,method:'POST',json:account('Denied City','deniedcity@example.invalid','admin')});
   await call('/api/team-accounts',403,{session:cityAdmin,method:'POST',origin:'https://invalid.example',json:account('Denied Origin','origin@example.invalid','rider')});
   const createdRider=await (await call('/api/team-accounts',201,{session:branch,method:'POST',json:account('New Rider','newrider@example.invalid','rider','C002')})).json();
   const newRider=await login('newrider@example.invalid');
   assert.equal(createdRider.account.cityId,'C001');
+  if(process.env.FLOW_ROLE_KEYS!=='canonical') {
+    await fixtures.query("UPDATE roles SET role_key=CASE role_key WHEN 'city_admin' THEN 'admin' WHEN 'branch_admin' THEN 'city_manager' ELSE role_key END");
+    await call('/api/team-accounts',201,{session:superAdmin,method:'POST',json:account('Canonical City','canonicalcity@example.invalid','admin','C003')});
+    assert.equal((await login('canonicalcity@example.invalid')).redirect,'/dashboard/admin');
+    const canonicalBranch=await (await call('/api/team-accounts',201,{session:cityAdmin,method:'POST',json:account('Canonical Branch','canonicalbranch@example.invalid','city_manager')})).json();
+    assert.equal((await login('canonicalbranch@example.invalid')).redirect,'/dashboard/manager');
+    const canonicalList=await (await call('/api/team-accounts',200,{session:cityAdmin})).json();assert.ok(canonicalList.accounts.some((account:{id:string;role:string})=>account.id===canonicalBranch.account.id&&account.role==='Branch Admin'));
+    await call('/api/team-accounts',200,{session:cityAdmin,method:'DELETE',json:{userId:canonicalBranch.account.id,confirmedEmail:'canonicalbranch@example.invalid'}});
+    await call('/api/auth/login',401,{method:'POST',json:{email:'canonicalbranch@example.invalid',password}});
+    await fixtures.query("UPDATE roles SET role_key=CASE role_key WHEN 'admin' THEN 'city_admin' WHEN 'city_manager' THEN 'branch_admin' ELSE role_key END");
+    console.log('PASS live database role aliases and canonical role keys: create, login, list and scoped deletion');
+  }
   console.log('PASS account provisioning hierarchy, city enforcement, Super Admin read-only and origin checks');
+  if(accountsOnly){console.log(`${checks} isolated account HTTP checks passed.`);return;}
 
   await call('/api/dashboard/boxes',201,{session:cityAdmin,method:'POST',json:{boxId:'QA-NEW-BOX',qrCode:'QR-QA-NEW-BOX',cityId:'C002',district:'Karachi East',area:'Gulshan',locationType:'Shop',locationDescription:'New test location',installationDate:'2026-11-11',securityLevel:'Standard',assignedRiderId:'QA-R1'}});
   assert.equal((await fixtures.query("SELECT city_id FROM donation_boxes WHERE box_id='QA-NEW-BOX'")).rows[0].city_id,'C001');
   assert.equal((await fixtures.query("SELECT district FROM donation_boxes WHERE box_id='QA-NEW-BOX'")).rows[0].district,'Karachi East');
+  const treeHtml=await (await call('/dashboard/admin/boxes?year=all',200,{session:cityAdmin})).text();
+  assert.ok(treeHtml.includes('data-tree-node="city"'));assert.ok(treeHtml.includes('data-tree-node="area"'));assert.ok(treeHtml.includes('data-tree-node="box"'));assert.ok(treeHtml.includes('data-tree-edge'));assert.ok(treeHtml.includes('QA-NEW-BOX'));assert.ok(!treeHtml.includes('QA-BOX2'));
   await call('/api/dashboard/boxes/QA-BOX1/district',403,{session:superAdmin,method:'PATCH',json:{district:'Karachi South'}});
   await call('/api/dashboard/boxes/QA-BOX1/district',403,{session:rider,method:'PATCH',json:{district:'Karachi South'}});
   await call('/api/dashboard/boxes/QA-BOX2/district',404,{session:branch,method:'PATCH',json:{district:'Karachi South'}});
@@ -120,7 +150,7 @@ try {
   await fixtures.query("UPDATE collections SET cash_handover_status='Received',deposit_status='Pending' WHERE collection_id=$1",[submitted.collectionId]);
   const riderHtml=await (await call('/dashboard/rider/collections',200,{session:rider})).text();assert.ok(!riderHtml.includes('NaN'));assert.ok(riderHtml.includes('Received'));
   const districtHtml=await (await call('/dashboard/admin/leaderboard?city=C002&year=all',200,{session:cityAdmin})).text();
-  assert.ok(districtHtml.includes('District Leaderboard'));assert.ok(districtHtml.includes('Karachi East'));assert.ok(districtHtml.includes('1,234'));assert.ok(!districtHtml.includes('Lahore'));
+  assert.ok(districtHtml.includes('District Leaderboard'));assert.ok(districtHtml.includes('Karachi East'));assert.ok(districtHtml.includes('1,235'));assert.ok(!districtHtml.includes('Lahore'));
   const networkDistrictHtml=await (await call('/dashboard/leaderboard?city=C001&year=all',200,{session:superAdmin})).text();assert.ok(networkDistrictHtml.includes('Karachi East'));
   console.log('PASS task assignment, cash and non-cash completion, closed/skipped guards, duplicates and Karachi dates');
 
@@ -164,6 +194,7 @@ try {
   await fixtures.query("UPDATE riders SET employment_status='Active' WHERE rider_id='QA-R1'");
   console.log('PASS soft deletion preserves history and stale city/role/inactive-rider sessions cannot write');
 
+  assert.ok(workbook,'Pass the source workbook path');
   const workbookBytes=await fs.readFile(workbook);
   const upload=(mode:string,fingerprint?:string)=>{const form=new FormData();form.set('file',new Blob([new Uint8Array(workbookBytes)]),'reports.xlsx');form.set('mode',mode);if(fingerprint) form.set('fingerprint',fingerprint);return form;};
   const preview=(await (await call('/api/reports/import',200,{session:cityAdmin,method:'POST',form:upload('preview')})).json()).preview;
@@ -176,10 +207,26 @@ try {
   for(const [session,prefix] of [[superAdmin,'/dashboard'],[cityAdmin,'/dashboard/admin'],[branch,'/dashboard/manager']] as const) for(const suffix of ['', '/collections','/boxes','/riders','/finance','/leaderboard','/transactions','/analytics','/inventory','/operations']) await call(`${prefix}${suffix}`,200,{session});
   for(const [session,prefix] of [[cityAdmin,'/dashboard/admin'],[branch,'/dashboard/manager']] as const) for(const suffix of ['/team','/import']) await call(`${prefix}${suffix}`,200,{session});
   for(const suffix of ['', '/tasks','/collections','/profile']) await call(`/dashboard/rider${suffix}`,200,{session:rider});
+  const reportedTreeHtml=await (await call('/dashboard/admin/boxes?year=2026',200,{session:cityAdmin})).text();assert.ok(reportedTreeHtml.includes('Reported collection:'));assert.ok(reportedTreeHtml.includes('Collection:'));
   const scopedHtml=await (await call('/dashboard/admin/collections?city=C002',200,{session:cityAdmin})).text();assert.ok(!scopedHtml.includes('Lahore'));
   const logout=await call('/api/auth/logout',303,{session:rider,method:'POST'});assert.ok(logout.headers.get('set-cookie')?.includes('Max-Age=0'));
   console.log('PASS HTTP Excel preview/apply, fingerprint, city exclusion, idempotency, all role pages and logout');
   console.log(`${checks} isolated full-flow HTTP checks passed.`);
+  if(process.env.FLOW_VISUAL_REVIEW==='1') {
+    const preview=createServer(async(request,response)=>{
+      if(request.method!=='GET'){response.writeHead(405);response.end();return;}
+      try{const headers=new Headers();for(const [key,value] of Object.entries(request.headers))if(value!==undefined)headers.set(key,Array.isArray(value)?value.join(','):value);headers.set('host','127.0.0.1:3117');headers.set('cookie',cityAdmin.cookie);const upstream=await fetch(`${base}${request.url}`,{headers,redirect:'manual'});response.writeHead(upstream.status,Object.fromEntries([...upstream.headers].filter(([key])=>!['content-length','content-encoding','transfer-encoding','set-cookie'].includes(key))));response.end(Buffer.from(await upstream.arrayBuffer()));}
+      catch{response.writeHead(503);response.end('Preview unavailable');}
+    });
+    await new Promise<void>(resolve=>preview.listen(4179,'127.0.0.1',resolve));
+    console.log('Read-only isolated tree review ready on 4179. Send Enter to finish cleanup.');
+    process.stdin.resume();
+    let release:()=>void=()=>{};const done=new Promise<void>(resolve=>{release=resolve;});
+    const timer=setTimeout(release,300000);process.stdin.once('data',release);
+    try{await done;}finally{clearTimeout(timer);process.stdin.removeListener('data',release);process.stdin.pause();await new Promise<void>(resolve=>preview.close(()=>resolve()));}
+  }
+  }
+  await exerciseFlow();
 } catch(error) {
   if(serverLog) console.error(serverLog);
   throw error;

@@ -1,6 +1,7 @@
 import { withApiErrors } from '@/lib/api-errors';
 import { createTeamAccount, isCurrentLoginSession } from "@/lib/admin-accounts";
 import { hashPassword } from "@/lib/auth";
+import { getDatabasePool } from "@/lib/db";
 import { hasValidRequestOrigin } from "@/lib/operations-auth";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 import { cookies } from "next/headers";
@@ -70,6 +71,9 @@ async function handlePOST(request: Request) {
     return Response.json({ error: "Enter a valid phone number (7–15 digits)." }, { status: 400 });
   }
   if (!cityId || cityId.length > 16) {
+    return Response.json({ error: "Choose a valid city." }, { status: 400 });
+  }
+  if (!(await getDatabasePool().query('SELECT 1 FROM cities WHERE city_id=$1',[cityId])).rowCount) {
     return Response.json({ error: "Choose a valid city." }, { status: 400 });
   }
   if (input.password.length < 12 || input.password.length > 1024) {

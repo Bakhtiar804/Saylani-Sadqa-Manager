@@ -87,6 +87,11 @@ try {
   const personal=await getRiderDetails({...actor,role:'rider',userId:'TEST-R1'},'2026-10');assert.equal(personal.profiles.length,1);
   const tree=await getNetworkTree({network:false,cityId:'C001'},{cityId:'C002',month:'2026-09',channel:'all'});
   assert.equal(tree.length,1);assert.equal(tree[0].name,'Karachi');assert.equal(tree[0].registeredBoxes,1);assert.equal(tree[0].areas[0].boxes[0].id,'B1');assert.ok(tree[0].reportedBoxes!==null);
+  const expectedTreeTotal=Number((await isolated.query("SELECT SUM(r.amount_pkr)::text AS amount FROM monthly_collection_reports r JOIN reporting_cities city USING(city_id) WHERE city.operational_city_id='C001' AND EXTRACT(YEAR FROM r.report_month)=2026 AND collection_channel='public'")).rows[0].amount);
+  await isolated.query("DELETE FROM donation_boxes WHERE city_id='C001'");
+  const reportTree=await getNetworkTree({network:false,cityId:'C001'},{cityId:'C002',month:'2026-09',channel:'public',year:'2026'});
+  assert.equal(reportTree.length,1);assert.equal(reportTree[0].registeredBoxes,0);assert.equal(reportTree[0].areas.length,0);assert.equal(reportTree[0].reports?.length,1);assert.ok(Math.abs(reportTree[0].reportedCollection!-expectedTreeTotal)<.01);assert.equal(reportTree[0].reports![0].channel,'public');
+  console.log('PASS reported city collections remain available without registered boxes, with year/channel and city scope');
   console.log('PASS rider month/location history, personal scope and city → area → box tree');
 } finally {
   globalThis.saylaniDatabasePool=previousPool;

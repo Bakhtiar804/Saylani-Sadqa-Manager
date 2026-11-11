@@ -16,6 +16,13 @@ the server, independently of form fields and URL filters.
 ## Individual operational records
 
 1. A City Admin registers a box through Network Tree → Registered box inventory.
+   The database-backed diagram groups it under its city and area. The tree uses
+   circular nodes and straight connecting lines. Select a node for details,
+   collapse/expand area branches, or use zoom/fit and scrolling to explore.
+   Where only monthly source reports are available, the diagram instead shows
+   Public/Branch collection totals and reported box-count aggregate nodes. Those
+   figures use the same year/channel filters as reports. Monthly totals do not
+   create individual box IDs or inferred area names.
 2. A City/Branch Admin assigns a rider through Rider Details. Box and rider must
    belong to that admin's city. Cash tasks require an active box and rider.
 3. The rider starts an assigned task. Scheduled collections accept a positive

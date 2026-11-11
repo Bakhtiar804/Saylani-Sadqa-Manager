@@ -31,12 +31,12 @@ function getTeamRoleLabel(role: TeamRole): TeamAccount["role"] {
 
 export async function listTeamAccounts(session: UserSession): Promise<TeamAccount[]> {
   const parameters: unknown[] = [];
-  let filter = "r.role_key IN ('admin', 'city_manager', 'rider')";
+  let filter = "r.role_key IN ('admin', 'city_admin', 'city_manager', 'branch_admin', 'rider')";
   if (session.role !== "super_admin") {
     if (!session.cityId) return [];
     parameters.push(session.cityId);
     filter += ` AND u.city_id = $${parameters.length}`;
-    filter += session.role === "admin" ? " AND r.role_key IN ('city_manager', 'rider')" : " AND r.role_key = 'rider'";
+    filter += session.role === "admin" ? " AND r.role_key IN ('city_manager', 'branch_admin', 'rider')" : " AND r.role_key = 'rider'";
   }
   const result = await getDatabasePool().query<QueryResultRow & {
     user_id: string; full_name: string; email: string; phone: string; role_key: TeamRole;
@@ -45,7 +45,7 @@ export async function listTeamAccounts(session: UserSession): Promise<TeamAccoun
     employment_status: TeamAccount["employmentStatus"]; created_at: Date | null;
   }>(`
     SELECT u.user_id, u.full_name, u.email, u.phone, u.account_status,
-      r.role_key, u.city_id, city.city_name,
+      CASE r.role_key WHEN 'city_admin' THEN 'admin' WHEN 'branch_admin' THEN 'city_manager' ELSE r.role_key END AS role_key, u.city_id, city.city_name,
       rider.assigned_zone, rider.employment_status, u.created_at
     FROM users u
     JOIN roles r ON r.role_id = u.role_id
@@ -104,7 +104,8 @@ export async function softDeleteTeamAccount(input: {
     `, [input.userId]);
     const target = result.rows[0];
     if (!target) throw new TeamAccountDeleteError("This account was not found or has already been deleted.", 404);
-    if (!allowedTargets.includes(target.role_key as TeamRole)) {
+    const targetRole = normalizeLoginRole(target.role_key);
+    if (!targetRole || !allowedTargets.includes(targetRole as TeamRole)) {
       throw new TeamAccountDeleteError("You are not allowed to delete this role.", 403);
     }
     if (input.actor.role !== "super_admin" && (!input.actor.cityId || target.city_id !== input.actor.cityId)) {
@@ -173,12 +174,14 @@ export async function createTeamAccount(input: {
     }>(`
       INSERT INTO users (user_id, full_name, email, phone, city_id, role_id, identity_type, account_status, password_hash)
       VALUES ($1, $2, $3, $4, $5,
-        (SELECT role_id FROM roles WHERE role_key = $6),
+        (SELECT role_id FROM roles WHERE role_key IN ($6::text, $9::text)
+         ORDER BY CASE WHEN role_key = $6::text THEN 0 ELSE 1 END LIMIT 1),
         'login_account', $7, $8)
       RETURNING user_id, full_name, email, phone, city_id, account_status, created_at,
         $6::VARCHAR AS role_key,
         (SELECT city_name FROM cities WHERE city_id = $5) AS city_name
-    `, [userId, input.name, input.email.toLowerCase(), input.phone, input.cityId, input.role, input.accountStatus, input.passwordHash]);
+    `, [userId, input.name, input.email.toLowerCase(), input.phone, input.cityId, input.role, input.accountStatus, input.passwordHash,
+      input.role === 'admin' ? 'city_admin' : input.role === 'city_manager' ? 'branch_admin' : 'rider']);
     const account = result.rows[0];
     if (!account) throw new Error("Account could not be created. Check that the selected role and city exist.");
     if (client) {

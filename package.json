@@ -16,7 +16,8 @@
     "test:ranking": "node scripts/test-ranking-filters.mjs",
     "test:leaderboard": "node scripts/test-leaderboard-refresh.mjs",
     "test:meeting": "node --conditions=react-server --import jiti/register scripts/run-meeting-tests.mts",
-    "test:flow": "node --conditions=react-server --import jiti/register scripts/run-project-flow.mts"
+    "test:flow": "node --conditions=react-server --import jiti/register scripts/run-project-flow.mts",
+    "test:accounts": "node --conditions=react-server --import jiti/register scripts/run-project-flow.mts --accounts-only"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.5.0",
