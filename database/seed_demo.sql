@@ -40,7 +40,7 @@ VALUES
   ('C026', 'Gwadar', 'Balochistan')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO users (user_id, full_name, email, phone, city_id, role_id, identity_type, account_status, password_hash)
+INSERT INTO team_members (team_id, full_name, email, phone, city_id, role_id, identity_type, account_status, password_hash)
 VALUES
   ('USR0001', 'Ayesha Ahmed', 'user0001@demo.sadqabox.test', '3002626229', 'C004', NULL, 'field_staff', 'active', NULL),
   ('USR0002', 'Saad Iqbal', 'user0002@demo.sadqabox.test', '3008835373', 'C003', NULL, 'field_staff', 'active', NULL),
@@ -307,7 +307,7 @@ VALUES
   ('PAR009', 'Noor Community Network', 'Community Organization', 'C001', 'Noor Ahmed', 'partnership9@demo.sadqabox.test', 'Active', '2026-01-15', 'Fictional demo partner; linked leaderboard records are synthetic.')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO riders (rider_id, user_id, employment_status, assigned_zone)
+INSERT INTO riders (rider_id, team_id, employment_status, assigned_zone)
 VALUES
   ('RID001', 'USR0015', 'Active', 'West'),
   ('RID002', 'USR0021', 'Active', 'Central'),
@@ -356,7 +356,7 @@ VALUES
   ('RID045', 'USR0238', 'Active', 'South')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO donation_boxes (box_id, qr_code, city_id, area, location_type, location_description, custodian_user_id, partner_id, assigned_rider_id, installation_date, box_status, last_verified_date, security_level, is_demo_record)
+INSERT INTO donation_boxes (box_id, qr_code, city_id, area, location_type, location_description, custodian_team_id, partner_id, assigned_rider_id, installation_date, box_status, last_verified_date, security_level, is_demo_record)
 VALUES
   ('BOX00001', 'SBX-DEMO-00001', 'C001', 'Saddar', 'Shop', 'Saddar demo location 2', 'USR0029', 'PAR002', 'RID022', '2026-03-25', 'Active', '2026-10-29', 'Standard', TRUE),
   ('BOX00002', 'SBX-DEMO-00002', 'C003', 'Gulberg', 'Mosque', 'Gulberg demo location 26', 'USR0153', NULL, 'RID025', '2025-12-09', 'Active', '2026-10-05', 'Enhanced', TRUE),
@@ -932,7 +932,7 @@ VALUES
   ('BOX00572', 'SBX-DEMO-00572', 'C002', 'People''s Colony', 'Public Place', 'People''s Colony demo partner location 72', 'USR0049', 'PAR009', 'RID020', '2026-06-20', 'Active', '2026-11-07', 'Standard', TRUE)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO collections (collection_id, box_id, rider_id, city_id, partner_id, collection_date, collection_time, collection_amount_pkr, collection_status, recorded_by_user_id, verification_reference, notes, is_demo_record, location_type, location_description, custodian_user_id, collector_team_id, seal_number_before, seal_number_after, seal_condition, box_condition, counted_by_user_id, witness_name, cash_notes_pkr, cash_coins_pkr, other_cash_pkr, cash_total_counted_pkr, cash_handover_status, handover_reference, deposit_status, deposit_date, deposit_reference, deposit_amount_pkr, discrepancy_amount_pkr, discrepancy_reason, verification_method, verified_by_user_id, verified_at, donation_purpose_designation, supporting_document_reference)
+INSERT INTO collections (collection_id, box_id, rider_id, city_id, partner_id, collection_date, collection_time, collection_amount_pkr, collection_status, recorded_by_team_id, verification_reference, notes, is_demo_record, location_type, location_description, custodian_team_id, collector_team_id, seal_number_before, seal_number_after, seal_condition, box_condition, counted_by_team_id, witness_name, cash_notes_pkr, cash_coins_pkr, other_cash_pkr, cash_total_counted_pkr, cash_handover_status, handover_reference, deposit_status, deposit_date, deposit_reference, deposit_amount_pkr, discrepancy_amount_pkr, discrepancy_reason, verification_method, verified_by_team_id, verified_at, donation_purpose_designation, supporting_document_reference)
 VALUES
   ('COL000001', 'BOX00274', 'RID041', 'C005', NULL, '2026-10-24', '09:15', 8000, 'Pending Verification', 'USR0208', NULL, 'Synthetic transaction for testing; not an actual donation.', TRUE, 'Shop', 'Cantt demo location 28', 'USR0180', 'TEAM-024', 'SEAL-737557', 'SEAL-427505', 'Intact', 'Good', 'USR0208', 'Demo Witness A', 6555, 555, 890, 8000, 'Pending', NULL, 'Pending Verification', NULL, NULL, 0, 0, NULL, 'Pending', NULL, NULL, 'General / Unspecified (confirm box designation)', NULL),
   ('COL000002', 'BOX00163', 'RID022', 'C003', NULL, '2026-11-04', '11:15', 2500, 'Verified', 'USR0111', 'VER-DEMO-000002', 'Synthetic transaction for testing; not an actual donation.', TRUE, 'Shop', 'Iqbal Town demo location 24', 'USR0113', 'TEAM-013', 'SEAL-178664', 'SEAL-396573', 'Intact', 'Minor Damage', 'USR0111', 'Demo Witness B', 2365, 151, 0, 2500, 'Handed Over', 'HND-DEMO-000002', 'Awaiting Deposit', NULL, NULL, 0, 0, NULL, 'Document Review', 'USR0055', '2026-11-04 19:00:00', 'General / Unspecified (confirm box designation)', 'DOC-DEMO-000002'),
@@ -2840,7 +2840,7 @@ VALUES
   ('TSK00300', 'RID038', 'BOX00488', '2026-10-25', 'Box Verification', 'Completed', '15:15', 'Demo task record.')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO field_collection_logs (field_collection_id, collection_date, collection_time, box_id, city_id, area, location_type, full_location_description, partner_id, custodian_user_id, rider_id, collector_team_id, task_id, box_status_at_visit, seal_number_before, seal_number_after, seal_condition, box_condition, cash_notes_pkr, cash_coins_pkr, other_cash_pkr, total_cash_counted_pkr, counted_by_user_id, witness_name, collection_status, cash_handover_status, handover_reference, deposit_status, deposit_date, deposit_reference, deposit_amount_pkr, discrepancy_amount_pkr, discrepancy_reason, verification_method, verified_by_user_id, donation_purpose_designation, remarks, created_at, is_demo_record)
+INSERT INTO field_collection_logs (field_collection_id, collection_date, collection_time, box_id, city_id, area, location_type, full_location_description, partner_id, custodian_team_id, rider_id, collector_team_id, task_id, box_status_at_visit, seal_number_before, seal_number_after, seal_condition, box_condition, cash_notes_pkr, cash_coins_pkr, other_cash_pkr, total_cash_counted_pkr, counted_by_team_id, witness_name, collection_status, cash_handover_status, handover_reference, deposit_status, deposit_date, deposit_reference, deposit_amount_pkr, discrepancy_amount_pkr, discrepancy_reason, verification_method, verified_by_team_id, donation_purpose_designation, remarks, created_at, is_demo_record)
 VALUES
   ('FCL-000001', '2026-10-29', '18:45', 'BOX00188', 'C001', 'Saddar', 'Shop', 'Saddar demo location 28', 'PAR001', 'USR0205', 'RID011', 'TEAM-022', 'TSK00196', 'Active', 'SEAL-276154', 'SEAL-771604', 'Intact', 'Needs Inspection', 1717, 252, 331, 2300, 'USR0067', 'Demo Witness A', 'Verified', 'Handed Over', 'HND-FLD-000001', 'Awaiting Deposit', NULL, NULL, 0, 0, NULL, 'Document Review', 'USR0149', 'General / Unspecified (confirm box designation)', 'Synthetic field demo record; not an actual Saylani collection.', '2026-10-29 18:05:00', TRUE),
   ('FCL-000002', '2026-10-05', '14:30', 'BOX00120', 'C005', 'Shah Rukn-e-Alam', 'Mosque', 'Shah Rukn-e-Alam demo location 5', NULL, 'USR0109', 'RID019', 'TEAM-017', 'TSK00144', 'Active', 'SEAL-121691', 'SEAL-619004', 'Not Applicable', 'Minor Damage', 7383, 1576, -59, 8900, 'USR0100', 'Demo Witness C', 'Verified', 'Handed Over', 'HND-FLD-000002', 'Deposited', '2026-10-05', 'DEP-FLD-000002', 8900, 0, NULL, 'Supervisor Review', 'USR0143', 'General / Unspecified (confirm box designation)', 'Synthetic field demo record; not an actual Saylani collection.', '2026-10-05 20:05:00', TRUE),
@@ -3094,7 +3094,7 @@ VALUES
   ('FCL-000250', '2026-10-24', '18:15', 'BOX00026', 'C004', 'Latifabad', 'House', 'Latifabad demo location 8', NULL, 'USR0138', 'RID034', 'TEAM-014', 'TSK00260', 'Active', 'SEAL-648609', 'SEAL-911864', 'Not Applicable', 'Good', 1932, 217, 151, 2300, 'USR0170', 'Demo Witness C', 'Verified', 'Handed Over', 'HND-FLD-000250', 'Awaiting Deposit', NULL, NULL, 0, 0, NULL, 'Document Review', 'USR0232', 'General / Unspecified (confirm box designation)', 'Synthetic field demo record; not an actual Saylani collection.', '2026-10-24 20:20:00', TRUE)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO cash_handover_deposits (handover_id, handover_date, city_id, from_rider_id, received_by_user_id, collection_batch_reference, amount_declared_pkr, amount_received_pkr, difference_pkr, handover_status, deposit_status, deposit_date, deposit_reference, receipt_or_slip_reference, reconciled_by_user_id, reconciliation_notes, is_demo_record)
+INSERT INTO cash_handover_deposits (handover_id, handover_date, city_id, from_rider_id, received_by_team_id, collection_batch_reference, amount_declared_pkr, amount_received_pkr, difference_pkr, handover_status, deposit_status, deposit_date, deposit_reference, receipt_or_slip_reference, reconciled_by_team_id, reconciliation_notes, is_demo_record)
 VALUES
   ('HOV-00001', '2026-11-06', 'C003', 'RID019', 'USR0184', 'BATCH-DEMO-00004', 10000, 10000, 0, 'Disputed', 'Deposited', NULL, NULL, 'SLIP-DEMO-00001', NULL, 'Synthetic reconciliation record; replace with approved finance process.', TRUE),
   ('HOV-00002', '2026-11-06', 'C003', 'RID022', 'USR0198', 'BATCH-DEMO-00157', 18000, 18000, 0, 'Disputed', 'Reconciliation Required', NULL, NULL, 'SLIP-DEMO-00002', NULL, 'Synthetic reconciliation record; replace with approved finance process.', TRUE),
@@ -3198,7 +3198,7 @@ VALUES
   ('HOV-00100', '2026-10-24', 'C004', 'RID013', 'USR0097', 'BATCH-DEMO-00035', 10000, 10000, 0, 'Disputed', 'Reconciliation Required', NULL, NULL, 'SLIP-DEMO-00100', NULL, 'Synthetic reconciliation record; replace with approved finance process.', TRUE)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO box_inspections (inspection_id, inspection_date, box_id, city_id, area, inspected_by_user_id, custodian_name, box_condition, lock_condition, seal_condition, location_match, box_visible_and_accessible, security_concern_reported, follow_up_required, inspection_notes, is_demo_record)
+INSERT INTO box_inspections (inspection_id, inspection_date, box_id, city_id, area, inspected_by_team_id, custodian_name, box_condition, lock_condition, seal_condition, location_match, box_visible_and_accessible, security_concern_reported, follow_up_required, inspection_notes, is_demo_record)
 VALUES
   ('INS-00001', '2026-11-04', 'BOX00380', 'C003', 'Iqbal Town', 'USR0052', 'Hamza Khan', 'Damaged', 'Not Checked', 'Not Applicable', 'Yes', 'Yes', 'No', 'Yes', 'Fictional inspection entry for testing.', TRUE),
   ('INS-00002', '2026-11-07', 'BOX00139', 'C002', 'Jinnah Colony', 'USR0052', 'Zainab Shah', 'Damaged', 'Good', 'Broken', 'No', 'No', 'No', 'Yes', 'Fictional inspection entry for testing.', TRUE),
@@ -3322,7 +3322,7 @@ VALUES
   ('INS-00120', '2026-11-05', 'BOX00005', 'C005', 'Gulgasht', 'USR0176', 'Bilal Malik', 'Needs Maintenance', 'Good', 'Not Applicable', 'Yes', 'No', 'Yes', 'No', 'Fictional inspection entry for testing.', TRUE)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO box_status_history (history_id, box_id, previous_status, new_status, changed_on, changed_by_user_id, reason)
+INSERT INTO box_status_history (history_id, box_id, previous_status, new_status, changed_on, changed_by_team_id, reason)
 VALUES
   ('HST00001', 'BOX00135', 'Inactive', 'Damaged', '2026-10-28', 'USR0087', 'Demo status-change audit entry.'),
   ('HST00002', 'BOX00021', 'Inactive', 'Active', '2026-10-30', 'USR0169', 'Demo status-change audit entry.'),
@@ -3476,7 +3476,7 @@ VALUES
   ('HST00150', 'BOX00082', 'Active', 'Active', '2026-10-17', 'USR0086', 'Demo status-change audit entry.')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO security_incidents (incident_id, box_id, city_id, reported_by_user_id, incident_date, incident_type, severity, incident_status, resolution_notes)
+INSERT INTO security_incidents (incident_id, box_id, city_id, reported_by_team_id, incident_date, incident_type, severity, incident_status, resolution_notes)
 VALUES
   ('INC0001', 'BOX00371', 'C001', 'USR0189', '2026-10-14', 'Seal Concern', 'Low', 'Resolved', 'Fictional example; review workflow to be configured.'),
   ('INC0002', 'BOX00098', 'C005', 'USR0203', '2026-10-13', 'Other', 'Medium', 'Under Review', 'Fictional example; review workflow to be configured.'),

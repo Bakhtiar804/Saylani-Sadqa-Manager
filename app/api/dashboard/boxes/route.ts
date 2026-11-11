@@ -55,14 +55,14 @@ async function handlePOST(request: Request) {
       }
     }
     if (custodianUserId) {
-      const custodian = await client.query("SELECT 1 FROM users WHERE user_id = $1 AND identity_type = 'field_staff' AND city_id = $2", [custodianUserId, cityId]);
+      const custodian = await client.query("SELECT 1 FROM team_members WHERE team_id = $1 AND identity_type = 'field_staff' AND city_id = $2", [custodianUserId, cityId]);
       if (custodian.rowCount !== 1) {
         await client.query("ROLLBACK");
         return Response.json({ error: "Choose a field custodian in the box's city." }, { status: 400 });
       }
     }
     if (assignedRiderId) {
-      const rider = await client.query("SELECT 1 FROM riders JOIN users USING (user_id) WHERE riders.rider_id = $1 AND users.city_id = $2 AND users.account_status = 'active' AND users.deleted_at IS NULL", [assignedRiderId, cityId]);
+      const rider = await client.query("SELECT 1 FROM riders JOIN team_members USING (team_id) WHERE riders.rider_id = $1 AND team_members.city_id = $2 AND team_members.account_status = 'active' AND team_members.deleted_at IS NULL", [assignedRiderId, cityId]);
       if (rider.rowCount !== 1) {
         await client.query("ROLLBACK");
         return Response.json({ error: "Choose an active rider in the box's city." }, { status: 400 });
@@ -71,16 +71,16 @@ async function handlePOST(request: Request) {
     await client.query(`
       INSERT INTO donation_boxes (
         box_id, qr_code, city_id, area, location_type, location_description,
-        custodian_user_id, partner_id, assigned_rider_id, installation_date,
+        custodian_team_id, partner_id, assigned_rider_id, installation_date,
         box_status, security_level, is_demo_record, district
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Active', $11, FALSE, $12)
     `, [boxId, qrCode, cityId, area, locationType, locationDescription, custodianUserId, partnerId, assignedRiderId, installationDate, securityLevel, district]);
     await client.query(`
-      INSERT INTO box_status_history (history_id, box_id, previous_status, new_status, changed_on, changed_by_user_id, reason)
+      INSERT INTO box_status_history (history_id, box_id, previous_status, new_status, changed_on, changed_by_team_id, reason)
       VALUES ($1, $2, 'Not Registered', 'Active', CURRENT_DATE, $3, 'Initial registration')
     `, [randomBytes(8).toString("hex").toUpperCase(), boxId, session.userId]);
     await client.query(`
-      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_user_id, before_data, after_data)
+      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'donation_box', $2, 'registered', $3, NULL, $4::jsonb)
     `, [randomBytes(16).toString("hex"), boxId, session.userId, JSON.stringify({ cityId, district, area, locationType, boxStatus: "Active" })]);
     await client.query("COMMIT");

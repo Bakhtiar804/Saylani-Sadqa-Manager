@@ -8,7 +8,7 @@ Implemented in TypeScript. Existing PostgreSQL records were preserved.
 | Collection by city | Authenticated city bar charts with year and city filters |
 | Visual emphasis | Metric cards, charts, collapsible source notes, hierarchy cards and Victory Bar |
 | City → area → boxes | Searchable Network Tree showing monthly reported counts separately from individual registered boxes |
-| Super Admin | Can create City Admin accounts; operational records are read-only and API writes are denied |
+| Super Admin | Can create City Admins and edit/remove City Admin, Branch Admin and Rider accounts; operational records remain read-only |
 | Rider details | Contact/account details, zone, assignments, selected-month collection history, area and box breakdown |
 | Operational cost | Public operating expenses (fuel, salary and recorded categories); no invented branch expenses |
 | Sidebar | Eight items for Super, City and Branch Admin; four personal-workspace links for Riders |

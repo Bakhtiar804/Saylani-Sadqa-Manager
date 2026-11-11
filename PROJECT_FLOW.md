@@ -2,16 +2,26 @@
 
 ## Access
 
+`team_members` is the physical account table used by all SQL queries. Existing
+account references use `team_id` columns with their existing ID values; there is no `users`
+compatibility view. Existing databases migrate with `npm run migrate:team-members`.
+
 | Role | Account actions | Operational access |
 | --- | --- | --- |
-| Super Admin | Create City Admin | Read network reports and operational records |
-| City Admin | Create Branch Admin or Rider; remove permitted city team accounts | Register boxes, assign tasks, change box status, review collections and import own-city reports |
-| Branch Admin | Create/remove permitted Rider accounts | Assign tasks, change box status, review collections and import own-city reports |
+| Super Admin | Create City Admins; edit/remove City Admin, Branch Admin and Rider accounts | Read network reports and operational records |
+| City Admin | Create/edit/remove Branch Admin or Rider accounts in own city | Register boxes, assign tasks, change box status, review collections and import own-city reports |
+| Branch Admin | Create/edit/remove Rider accounts in own city | Assign tasks, change box status, review collections and import own-city reports |
 | Rider | None | View own profile, tasks and collections; submit assigned work |
 
 Passwords are checked at login. Protected requests also compare the cookie's
 role and city with the current active database account. Scope is enforced on
 the server, independently of form fields and URL filters.
+
+The team directory has role filtering and search. Edit saves contact details,
+login status and Rider zone/employment details through PATCH `/api/team-accounts`.
+Role, city and password remain outside this edit form. Removal disables sign-in
+and retains the account row for historical references. Matching login/employment
+statuses display once; differing employment status has an explicit label.
 
 ## Individual operational records
 

@@ -38,7 +38,7 @@ export async function applyReportUpload(plan:Awaited<ReturnType<typeof prepareRe
     if(reporting.rows[0]?.operational_city_id && reporting.rows[0].operational_city_id!==session.cityId) throw new ImportValidationError('The reporting city mapping needs administrator attention.');
     if(!reportCityId) reportCityId=(await client.query<{city_id:string}>(`INSERT INTO reporting_cities(city_name,normalized_city_name,province,operational_city_id) VALUES($1,$2,$3,$4) RETURNING city_id`,[plan.city.city_name,normalized,plan.city.province,session.cityId])).rows[0].city_id;
     else await client.query('UPDATE reporting_cities SET operational_city_id=$2 WHERE city_id=$1',[reportCityId,session.cityId]);
-    const batch=(await client.query<{batch_id:string}>(`INSERT INTO report_import_batches(source_sha256,source_file_name,reconciliation,actor_user_id,target_city_id) VALUES($1,$2,$3,$4,$5) RETURNING batch_id`,[plan.preview.fingerprint,fileName,JSON.stringify(plan.preview),session.userId,session.cityId])).rows[0].batch_id;
+    const batch=(await client.query<{batch_id:string}>(`INSERT INTO report_import_batches(source_sha256,source_file_name,reconciliation,actor_team_id,target_city_id) VALUES($1,$2,$3,$4,$5) RETURNING batch_id`,[plan.preview.fingerprint,fileName,JSON.stringify(plan.preview),session.userId,session.cityId])).rows[0].batch_id;
     await client.query(`INSERT INTO report_import_backups(batch_id,previous_rows) SELECT $1,jsonb_build_object(
       'collections',(SELECT COALESCE(jsonb_agg(r),'[]') FROM monthly_collection_reports r WHERE city_id=$2),
       'expenses',(SELECT COALESCE(jsonb_agg(r),'[]') FROM monthly_expense_reports r WHERE city_id=$2),

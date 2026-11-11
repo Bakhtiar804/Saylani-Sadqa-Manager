@@ -191,6 +191,89 @@ PostgreSQL confirmed the view is insertable and updatable. Read-only
 and authenticated Overview, Analytics and City Admin pages on the running dev
 server. All returned HTTP 200 with expected page content.
 
+## Team directory editing and role filters
+
+Team Accounts now uses a full-width directory with role filtering, search,
+member identity/contact layout, scoped Edit/Delete actions, and one login-status
+badge. A differing Rider employment status is labeled separately. Creation is
+available in an expandable form below the directory. PATCH persists contact,
+login status and Rider zone/employment changes in a transaction; it rejects
+role/city/password changes, self edits, foreign cities and unauthorized roles.
+Super Admin can now edit/remove City Admins; City/Branch scopes retain their
+existing hierarchy. Delete retains historical references through soft deletion.
+
+`node scripts/test-team-directory.mjs` passed role filtering, status rendering,
+action visibility, edit request payload, saved row refresh and delete dialog.
+`FLOW_ACCOUNT_VIEW=1 npm run test:accounts` passed 61 isolated HTTP checks with
+the renamed team_members/compatibility-view schema, including persistence,
+duplicate-email rollback, role/city/origin restrictions, deactivation and removal.
+Live account/collection/report snapshots were unchanged after fixture cleanup.
+Final live QA uncovered renamed Rider and other account-reference columns plus
+an identical duplicate account table. Applied `migrate_restore_account_names.sql`
+transactionally: original account table/columns and references now match the app,
+and the duplicate is archived. All 14 stable account identities, contact fields,
+password hashes, roles, statuses and dates were compared before commit; financial
+counts/totals were unchanged. Browser QA verified the real directory, City Admin
+role filtering and prefilled Edit dialog without saving/deleting live accounts.
+TypeScript, ESLint and production build passed.
+
+## Canonical team_members table
+
+The project owner requested `team_members` as the physical account table.
+Runtime SQL for authentication, team editing/removal, rider profiles, collection
+joins, inventory and audit reads now uses it directly. Fresh schema, seeds,
+foreign keys, maintenance scripts and test fixtures use the same table name.
+The stable `user_id` reference columns are unchanged. Prior reverse-name and
+compatibility-view migrations were retired; this section supersedes their
+historical workaround notes above.
+
+Applied `npm run migrate:team-members` transactionally on the live database.
+Verified all 14 complete account rows (including password hashes), original table
+OID, 16 foreign-key definitions and monthly collection totals before committing.
+The migration was reapplied safely; `public.users` does not exist as a table or
+view. No account copies were created by this migration.
+
+TypeScript, ESLint, production build and the team-directory UI test passed.
+Authenticated read-only requests on the running dev server loaded Overview,
+Analytics and Team Accounts successfully with real team_members records.
+`FLOW_ACCOUNT_RENAME=1 npm run test:flow -- <source-workbook>` passed **158
+isolated full-flow HTTP checks**: repeatable physical-table migration, all four
+role logins, account create/edit/remove, scope guards, rider tasks/collections,
+cash review/audit, inventory, Excel preview/import, all role pages and logout.
+Fixture cleanup completed and live account/collection/report snapshots matched
+their pre-test values.
+
+## Super Admin actions across team roles
+
+Super Admin can now edit/remove City Admin, Branch Admin and Rider accounts.
+The same shared policy controls UI visibility and backend authorization;
+operational-record write permissions and City/Branch city scopes are unchanged.
+The expandable Create a team account section appears above the directory.
+Updated UI regression passed with explicit Branch Admin Edit/Delete buttons.
+`npm run test:accounts` passed 68 isolated HTTP checks, including Super Admin
+Branch Admin edit/delete, Rider edit/delete, persisted data and login denial after
+removal. Live records remained unchanged after fixture cleanup. TypeScript,
+targeted ESLint and production build passed.
+
+## Canonical team_id column contract
+
+The live schema uses team_members.team_record_id/team_id and team_id or
+*_team_id references throughout Riders, collections, audit and import tables.
+Updated runtime SQL, record keys, client consumers, schema/seed and maintenance
+scripts to those names. This supersedes the earlier table-only migration notes
+that retained user_id column names. Session/API userId values remain the same
+stable account identifiers; existing cookies and passwords are preserved.
+
+The forward migration now normalizes legacy numeric/id/reference column names
+as well as the table name. Its runner compared all 14 complete live account rows,
+table identity, 16 foreign keys and report totals, and verified repeatability.
+Read-only authenticated requests on the running dev server loaded Overview,
+Analytics and Team Accounts. TypeScript, ESLint, team UI checks and production
+build passed. Full isolated testing with legacy columns followed by migration
+passed **165 HTTP checks**, including all roles, team edit/delete, rider cash/task
+flows, audit, inventory, Excel import and logout. Fixture cleanup verified live
+account/collection/report snapshots were unchanged.
+
 ## Limits
 
 These checks cover the implemented flows and confirmed regressions, not a

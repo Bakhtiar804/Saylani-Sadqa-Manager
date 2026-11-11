@@ -29,8 +29,8 @@ try {
   if(base) {
     const host = new URL(base).hostname;
     assert.ok(['localhost','127.0.0.1','[::1]'].includes(host),'Only send local test sessions to loopback servers');
-    const accounts = (await pool.query(`SELECT DISTINCT ON(role.role_key) u.user_id,u.email,u.full_name,u.city_id,role.role_key
-      FROM users u JOIN roles role USING(role_id) WHERE u.identity_type='login_account' AND u.account_status='active'
+    const accounts = (await pool.query(`SELECT DISTINCT ON(role.role_key) u.team_id,u.email,u.full_name,u.city_id,role.role_key
+      FROM team_members u JOIN roles role USING(role_id) WHERE u.identity_type='login_account' AND u.account_status='active'
       AND u.deleted_at IS NULL AND (role.role_key='super_admin' OR u.city_id IS NOT NULL) ORDER BY role.role_key,u.created_at DESC`)).rows;
     const secret = process.env.AUTH_SECRET!;
     assert.ok(secret);
@@ -38,7 +38,7 @@ try {
     // Missing roles are exercised by test:flow with real accounts in an isolated schema.
     for(const account of accounts) {
       if(!['super_admin','admin','city_manager'].includes(account.role_key)) continue;
-      const payload = Buffer.from(JSON.stringify({userId:account.user_id,email:account.email,name:account.full_name,cityId:account.city_id,role:account.role_key,expiresAt:Math.floor(Date.now()/1000)+600})).toString('base64url');
+      const payload = Buffer.from(JSON.stringify({userId:account.team_id,email:account.email,name:account.full_name,cityId:account.city_id,role:account.role_key,expiresAt:Math.floor(Date.now()/1000)+600})).toString('base64url');
       const signature = createHmac('sha256',secret).update(payload).digest('base64url');
       const headers = {Cookie:`saylani_admin_session=${payload}.${signature}`};
       const prefix = account.role_key==='admin'?'/dashboard/admin':account.role_key==='city_manager'?'/dashboard/manager':'/dashboard';
@@ -72,7 +72,7 @@ try {
         const html=await response.text();assert.ok(!html.includes('Verified'),'Legacy collection status labels must not be visible');
       }
       if(account.role_key==='super_admin') {
-        for(const [path,method] of [['/api/team-accounts','DELETE'],['/api/dashboard/boxes','POST'],['/api/dashboard/boxes/test','PATCH'],['/api/dashboard/rider-assignments','POST'],['/api/dashboard/collections/test/verification','PATCH'],['/api/reports/import','POST']] as const) {
+        for(const [path,method] of [['/api/dashboard/boxes','POST'],['/api/dashboard/boxes/test','PATCH'],['/api/dashboard/rider-assignments','POST'],['/api/dashboard/collections/test/verification','PATCH'],['/api/reports/import','POST']] as const) {
           const response=await fetch(`${base}${path}`,{method,headers:{...headers,'Content-Type':'application/json'},body:'{}'});
           assert.equal(response.status,403,`Super Admin write denied: ${path}`);
         }

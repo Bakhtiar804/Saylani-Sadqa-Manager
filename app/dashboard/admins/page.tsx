@@ -28,11 +28,11 @@ export default async function AdminManagementPage() {
       <PageHeading
         eyebrow="Access administration"
         title="Team Accounts"
-        description="Create City Admin logins with a city assignment."
+        description="Create City Admin logins and manage team accounts across cities."
       />
       <div className="mb-6 rounded-xl border border-[#dce8dc] bg-[#f5faf2] px-4 py-3 text-sm leading-6 text-[#536455]">
-        Super Admins can create City Admin accounts only. Branch
-        Admins and Riders are managed by their city teams.
+        Create City Admin accounts here. Edit or remove City Admin, Branch Admin
+        and Rider accounts from the team directory below.
       </div>
       <TeamAccountManagement actorRole="super_admin" initialAccounts={accounts} cities={cities} assignedCity={null} />
     </>

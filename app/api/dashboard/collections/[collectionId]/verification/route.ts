@@ -22,7 +22,7 @@ async function handleGET(_request: Request, context: { params: Promise<{ collect
       FROM collections collection
       LEFT JOIN activity_audit_log audit
         ON audit.entity_type = 'collection' AND audit.entity_id = collection.collection_id
-      LEFT JOIN users actor ON actor.user_id = audit.actor_user_id
+      LEFT JOIN team_members actor ON actor.team_id = audit.actor_team_id
       WHERE collection.collection_id = $1
         AND ($2::boolean OR collection.city_id = $3)
       ORDER BY audit.occurred_at DESC NULLS LAST
@@ -75,12 +75,12 @@ async function handlePATCH(request: Request, context: { params: Promise<{ collec
     const status = body.status as typeof decisions[number];
     await client.query(`
       UPDATE collections
-      SET collection_status = $2::text, verified_by_user_id = $3, verified_at = CURRENT_TIMESTAMP,
+      SET collection_status = $2::text, verified_by_team_id = $3, verified_at = CURRENT_TIMESTAMP,
           notes = CASE WHEN $4::text = '' THEN notes ELSE CONCAT_WS(CHR(10), notes, 'Review [' || CASE WHEN $2::text = 'Verified' THEN 'Recorded' ELSE 'Flagged' END || ']: ' || $4::text) END
       WHERE collection_id = $1
     `, [collectionId, status, session.userId, notes]);
     await client.query(`
-      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_user_id, before_data, after_data)
+      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'collection', $2, 'reviewed', $3, $4::jsonb, $5::jsonb)
     `, [randomBytes(16).toString("hex"), collectionId, session.userId, JSON.stringify({ status: current.collection_status }), JSON.stringify({ status, notes })]);
     await client.query("COMMIT");

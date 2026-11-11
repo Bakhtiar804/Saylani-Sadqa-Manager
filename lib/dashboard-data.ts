@@ -7,7 +7,7 @@ import type { CityOption, DataRecord } from "@/lib/dashboard-types";
 export const DASHBOARD_DATA_CACHE_TAG = "dashboard-db-records";
 
 type DashboardRecord = DataRecord & {
-  user_id?: string | null;
+  team_id?: string | null;
   rider_id?: string;
   box_id?: string | null;
   partner_id?: string;
@@ -69,7 +69,7 @@ const dashboardQueries = {
   cities: "SELECT city_id, city_name, province FROM cities ORDER BY city_name",
   partners: `SELECT p.*, c.city_name FROM partners p JOIN cities c USING (city_id) ORDER BY p.partner_name`,
   users: `
-      SELECT u.user_id, u.full_name, u.email, u.phone, u.city_id, c.city_name,
+      SELECT u.team_id, u.full_name, u.email, u.phone, u.city_id, c.city_name,
         CASE r.role_key
           WHEN 'admin' THEN 'City Admin'
           WHEN 'city_manager' THEN 'Branch Admin'
@@ -80,14 +80,14 @@ const dashboardQueries = {
         u.identity_type,
         CASE WHEN u.deleted_at IS NOT NULL THEN 'Deleted' ELSE INITCAP(u.account_status) END AS account_status,
         u.created_at
-      FROM users u
+      FROM team_members u
       LEFT JOIN roles r ON r.role_id = u.role_id
       LEFT JOIN cities c ON c.city_id = u.city_id
-      ORDER BY u.full_name, u.user_id
+      ORDER BY u.full_name, u.team_id
     `,
   riders: `
       SELECT r.*, u.full_name AS rider_name, u.phone, u.city_id, c.city_name
-      FROM riders r JOIN users u USING (user_id)
+      FROM riders r JOIN team_members u USING (team_id)
       LEFT JOIN cities c ON c.city_id = u.city_id
       ORDER BY u.full_name
     `,
@@ -96,10 +96,10 @@ const dashboardQueries = {
         p.partner_name, rider_user.full_name AS assigned_rider_name
       FROM donation_boxes b
       JOIN cities c ON c.city_id = b.city_id
-      LEFT JOIN users custodian ON custodian.user_id = b.custodian_user_id
+      LEFT JOIN team_members custodian ON custodian.team_id = b.custodian_team_id
       LEFT JOIN partners p ON p.partner_id = b.partner_id
       LEFT JOIN riders r ON r.rider_id = b.assigned_rider_id
-      LEFT JOIN users rider_user ON rider_user.user_id = r.user_id
+      LEFT JOIN team_members rider_user ON rider_user.team_id = r.team_id
       ORDER BY b.box_id
     `,
   collections: `
@@ -113,11 +113,11 @@ const dashboardQueries = {
       JOIN cities city ON city.city_id = collection.city_id
       LEFT JOIN partners partner ON partner.partner_id = collection.partner_id
       JOIN riders rider ON rider.rider_id = collection.rider_id
-      JOIN users rider_user ON rider_user.user_id = rider.user_id
-      JOIN users recorder ON recorder.user_id = collection.recorded_by_user_id
-      LEFT JOIN users counter ON counter.user_id = collection.counted_by_user_id
-      LEFT JOIN users verifier ON verifier.user_id = collection.verified_by_user_id
-      LEFT JOIN users custodian ON custodian.user_id = collection.custodian_user_id
+      JOIN team_members rider_user ON rider_user.team_id = rider.team_id
+      JOIN team_members recorder ON recorder.team_id = collection.recorded_by_team_id
+      LEFT JOIN team_members counter ON counter.team_id = collection.counted_by_team_id
+      LEFT JOIN team_members verifier ON verifier.team_id = collection.verified_by_team_id
+      LEFT JOIN team_members custodian ON custodian.team_id = collection.custodian_team_id
       ORDER BY collection.collection_date DESC, collection.collection_id
     `,
   riderTasks: `
@@ -126,7 +126,7 @@ const dashboardQueries = {
       JOIN donation_boxes box ON box.box_id = task.box_id
       JOIN cities city ON city.city_id = box.city_id
       JOIN riders rider ON rider.rider_id = task.rider_id
-      JOIN users rider_user ON rider_user.user_id = rider.user_id
+      JOIN team_members rider_user ON rider_user.team_id = rider.team_id
       ORDER BY task.task_date DESC, task.task_id
     `,
   fieldCollectionLog: `
@@ -139,10 +139,10 @@ const dashboardQueries = {
       JOIN cities city ON city.city_id = field.city_id
       LEFT JOIN partners partner ON partner.partner_id = field.partner_id
       JOIN riders rider ON rider.rider_id = field.rider_id
-      JOIN users rider_user ON rider_user.user_id = rider.user_id
-      LEFT JOIN users custodian ON custodian.user_id = field.custodian_user_id
-      LEFT JOIN users counter ON counter.user_id = field.counted_by_user_id
-      LEFT JOIN users verifier ON verifier.user_id = field.verified_by_user_id
+      JOIN team_members rider_user ON rider_user.team_id = rider.team_id
+      LEFT JOIN team_members custodian ON custodian.team_id = field.custodian_team_id
+      LEFT JOIN team_members counter ON counter.team_id = field.counted_by_team_id
+      LEFT JOIN team_members verifier ON verifier.team_id = field.verified_by_team_id
       ORDER BY field.collection_date DESC, field.field_collection_id
     `,
   cashHandoverDeposit: `
@@ -151,15 +151,15 @@ const dashboardQueries = {
       FROM cash_handover_deposits handover
       JOIN cities city ON city.city_id = handover.city_id
       JOIN riders rider ON rider.rider_id = handover.from_rider_id
-      JOIN users rider_user ON rider_user.user_id = rider.user_id
-      JOIN users receiver ON receiver.user_id = handover.received_by_user_id
+      JOIN team_members rider_user ON rider_user.team_id = rider.team_id
+      JOIN team_members receiver ON receiver.team_id = handover.received_by_team_id
       ORDER BY handover.handover_date DESC, handover.handover_id
     `,
   boxInspectionLog: `
       SELECT inspection.*, city.city_name, inspector.full_name AS inspected_by_name
       FROM box_inspections inspection
       JOIN cities city ON city.city_id = inspection.city_id
-      JOIN users inspector ON inspector.user_id = inspection.inspected_by_user_id
+      JOIN team_members inspector ON inspector.team_id = inspection.inspected_by_team_id
       ORDER BY inspection.inspection_date DESC, inspection.inspection_id
     `,
   boxStatusHistory: `
@@ -167,14 +167,14 @@ const dashboardQueries = {
       FROM box_status_history history
       JOIN donation_boxes box ON box.box_id = history.box_id
       JOIN cities city ON city.city_id = box.city_id
-      JOIN users actor ON actor.user_id = history.changed_by_user_id
+      JOIN team_members actor ON actor.team_id = history.changed_by_team_id
       ORDER BY history.changed_on DESC, history.history_id
     `,
   securityIncidents: `
       SELECT incident.*, city.city_name, reporter.full_name AS reported_by_name
       FROM security_incidents incident
       JOIN cities city ON city.city_id = incident.city_id
-      JOIN users reporter ON reporter.user_id = incident.reported_by_user_id
+      JOIN team_members reporter ON reporter.team_id = incident.reported_by_team_id
       ORDER BY incident.incident_date DESC, incident.incident_id
     `,
   operationalCosts: `
@@ -450,17 +450,17 @@ export async function getCollectionExplorerPage(options: CollectionExplorerOptio
     JOIN cities city ON city.city_id = collection.city_id
     LEFT JOIN partners partner ON partner.partner_id = collection.partner_id
     JOIN riders rider ON rider.rider_id = collection.rider_id
-    JOIN users rider_user ON rider_user.user_id = rider.user_id`;
+    JOIN team_members rider_user ON rider_user.team_id = rider.team_id`;
   const [rows, countRows] = await Promise.all([
     readRows(`SELECT collection.*, city.city_name, partner.partner_name,
       rider_user.full_name AS rider_name, recorder.full_name AS recorded_by_name,
       counter.full_name AS counted_by_name, verifier.full_name AS verified_by_name,
       custodian.full_name AS custodian_name
       ${joins}
-      LEFT JOIN users recorder ON recorder.user_id = collection.recorded_by_user_id
-      LEFT JOIN users counter ON counter.user_id = collection.counted_by_user_id
-      LEFT JOIN users verifier ON verifier.user_id = collection.verified_by_user_id
-      LEFT JOIN users custodian ON custodian.user_id = collection.custodian_user_id
+      LEFT JOIN team_members recorder ON recorder.team_id = collection.recorded_by_team_id
+      LEFT JOIN team_members counter ON counter.team_id = collection.counted_by_team_id
+      LEFT JOIN team_members verifier ON verifier.team_id = collection.verified_by_team_id
+      LEFT JOIN team_members custodian ON custodian.team_id = collection.custodian_team_id
       ${filterSql}
       ORDER BY ${sortSql} ${directionSql}, collection.collection_id ${directionSql}
       LIMIT ${limitParam} OFFSET ${offsetParam}`, values),
@@ -507,15 +507,15 @@ export async function getFieldCollectionExplorerPage(options: CollectionExplorer
     JOIN cities city ON city.city_id = field.city_id
     LEFT JOIN partners partner ON partner.partner_id = field.partner_id
     JOIN riders rider ON rider.rider_id = field.rider_id
-    JOIN users rider_user ON rider_user.user_id = rider.user_id`;
+    JOIN team_members rider_user ON rider_user.team_id = rider.team_id`;
   const [rows, countRows] = await Promise.all([
     readRows(`SELECT field.*, city.city_name, partner.partner_name,
       rider_user.full_name AS rider_name, custodian.full_name AS custodian_name,
       counter.full_name AS counted_by_name, verifier.full_name AS verified_by_name
       ${joins}
-      LEFT JOIN users custodian ON custodian.user_id = field.custodian_user_id
-      LEFT JOIN users counter ON counter.user_id = field.counted_by_user_id
-      LEFT JOIN users verifier ON verifier.user_id = field.verified_by_user_id
+      LEFT JOIN team_members custodian ON custodian.team_id = field.custodian_team_id
+      LEFT JOIN team_members counter ON counter.team_id = field.counted_by_team_id
+      LEFT JOIN team_members verifier ON verifier.team_id = field.verified_by_team_id
       ${filterSql}
       ORDER BY ${sortSql} ${directionSql}, field.field_collection_id ${directionSql}
       LIMIT ${limitParam} OFFSET ${offsetParam}`, values),
@@ -662,11 +662,11 @@ export async function getOverviewData(
       JOIN cities city ON city.city_id = collection.city_id
       LEFT JOIN partners partner ON partner.partner_id = collection.partner_id
       JOIN riders rider ON rider.rider_id = collection.rider_id
-      JOIN users rider_user ON rider_user.user_id = rider.user_id
-      JOIN users recorder ON recorder.user_id = collection.recorded_by_user_id
-      LEFT JOIN users counter ON counter.user_id = collection.counted_by_user_id
-      LEFT JOIN users verifier ON verifier.user_id = collection.verified_by_user_id
-      LEFT JOIN users custodian ON custodian.user_id = collection.custodian_user_id
+      JOIN team_members rider_user ON rider_user.team_id = rider.team_id
+      JOIN team_members recorder ON recorder.team_id = collection.recorded_by_team_id
+      LEFT JOIN team_members counter ON counter.team_id = collection.counted_by_team_id
+      LEFT JOIN team_members verifier ON verifier.team_id = collection.verified_by_team_id
+      LEFT JOIN team_members custodian ON custodian.team_id = collection.custodian_team_id
       ORDER BY collection.collection_date DESC, collection.collection_id LIMIT 8`, parameters),
     readRows(`SELECT * FROM (
       SELECT ('collection-' || collection.collection_id) AS id, collection.city_id,

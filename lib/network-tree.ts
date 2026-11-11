@@ -15,7 +15,7 @@ export async function getNetworkTree(scope: MonthlyReportScope, snapshot: { city
     getDatabasePool().query<{box_id:string;qr_code:string;box_status:string;location_description:string;city_id:string;area:string;rider_name:string|null}>(`
       SELECT box.box_id,box.qr_code,box.box_status,box.location_description,box.city_id,box.area,person.full_name AS rider_name
       FROM donation_boxes box LEFT JOIN riders rider ON rider.rider_id=box.assigned_rider_id
-      LEFT JOIN users person ON person.user_id=rider.user_id
+      LEFT JOIN team_members person ON person.team_id=rider.team_id
       WHERE ($1::boolean AND $2='all') OR box.city_id=$2 ORDER BY box.area,box.box_id`,parameters),
     getDatabasePool().query<{city_id:string;channel:string;boxes:number|null;amount:string|null;records:number}>(`SELECT city.operational_city_id AS city_id,r.collection_channel AS channel,
       SUM(r.box_count) FILTER(WHERE TO_CHAR(r.report_month,'YYYY-MM')=$3)::int AS boxes,

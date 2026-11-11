@@ -11,7 +11,7 @@ import { isCurrentLoginSession } from './admin-accounts';
 
 type RiderProfile = {
   rider_id: string;
-  user_id: string;
+  team_id: string;
   full_name: string;
   email: string;
   phone: string | null;
@@ -38,13 +38,13 @@ export async function getRiderDashboard(userId: string) {
 
   const pool = getDatabasePool();
   const profileResult = await pool.query<RiderProfile>(`
-    SELECT rider.rider_id, user_record.user_id, user_record.full_name,
+    SELECT rider.rider_id, user_record.team_id, user_record.full_name,
       user_record.email, user_record.phone, user_record.city_id, city.city_name,
       rider.assigned_zone, rider.employment_status
     FROM riders rider
-    JOIN users user_record ON user_record.user_id = rider.user_id
+    JOIN team_members user_record ON user_record.team_id = rider.team_id
     LEFT JOIN cities city ON city.city_id = user_record.city_id
-    WHERE rider.user_id = $1
+    WHERE rider.team_id = $1
     LIMIT 1
   `, [userId]);
   const profile = profileResult.rows[0];

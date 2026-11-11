@@ -30,7 +30,7 @@ async function handlePOST(request: Request, context: { params: Promise<{ taskId:
       FROM rider_tasks task
       JOIN riders rider ON rider.rider_id = task.rider_id
       JOIN donation_boxes box ON box.box_id = task.box_id
-      WHERE task.task_id = $1 AND rider.user_id = $2 AND rider.employment_status='Active'
+      WHERE task.task_id = $1 AND rider.team_id = $2 AND rider.employment_status='Active'
       FOR UPDATE OF task, box
     `, [taskId, session.userId]);
     const task = result.rows[0];
@@ -51,12 +51,12 @@ async function handlePOST(request: Request, context: { params: Promise<{ taskId:
     await client.query(`
       INSERT INTO collections (
         collection_id, box_id, rider_id, city_id, partner_id, collection_date, collection_time,
-        collection_amount_pkr, collection_status, recorded_by_user_id, notes, is_demo_record
+        collection_amount_pkr, collection_status, recorded_by_team_id, notes, is_demo_record
       ) VALUES ($1, $2, $3, $4, $5, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::date, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time, $6, 'Pending Verification', $7, $8, FALSE)
     `, [collectionId, task.box_id, task.rider_id, task.city_id, task.partner_id, amount, session.userId, notes || null]);
     await client.query(`UPDATE rider_tasks SET task_status = 'Completed', completion_time = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time WHERE task_id = $1`, [taskId]);
     await client.query(`
-      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_user_id, before_data, after_data)
+      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'collection', $2, 'submitted', $3, NULL, $4::jsonb)
     `, [randomBytes(16).toString("hex"), collectionId, session.userId, JSON.stringify({ taskId, boxId: task.box_id, amount, status: "Pending Verification" })]);
     await client.query("COMMIT");

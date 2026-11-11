@@ -33,7 +33,9 @@ async function login(email:string):Promise<Session> {
   return {cookie,redirect:data.redirectTo};
 }
 const account=(name:string,email:string,role:string,cityId='C001')=>({name,email,password,role,cityId,phone:'+923001234567',accountStatus:'active',employmentStatus:'Active',assignedZone:'Test zone'});
-const liveSnapshot=async()=>({users:(await owner.query('SELECT COUNT(*)::int AS count FROM public.users')).rows,
+const liveAccountTable=(await owner.query("SELECT CASE WHEN to_regclass('public.team_members') IS NOT NULL THEN 'team_members' ELSE 'users' END AS name")).rows[0].name;
+assert.ok(['users','team_members'].includes(liveAccountTable));
+const liveSnapshot=async()=>({users:(await owner.query(`SELECT COUNT(*)::int AS count FROM public.${liveAccountTable}`)).rows,
   collections:(await owner.query('SELECT COUNT(*)::int AS count FROM public.collections')).rows,
   reports:(await owner.query('SELECT COUNT(*)::int AS count,SUM(amount_pkr)::text AS total FROM public.monthly_collection_reports')).rows});
 const before=await liveSnapshot();
@@ -50,7 +52,7 @@ try {
     ['QA-SUPER','QA Super','super@example.invalid',1,null],['QA-CITY','QA City','city@example.invalid',2,'C001'],
     ['QA-BRANCH','QA Branch','branch@example.invalid',3,'C001'],['QA-RIDER','QA Rider','rider@example.invalid',4,'C001'],
     ['QA-OTHER','QA Other','other@example.invalid',4,'C002'],
-  ] as const) await fixtures.query(`INSERT INTO users(user_id,full_name,email,phone,role_id,city_id,identity_type,account_status,password_hash) VALUES($1,$2,$3,'+923001234567',$4,$5,'login_account','active',$6)`,[id,name,email,role,city,hash]);
+  ] as const) await fixtures.query(`INSERT INTO team_members(team_id,full_name,email,phone,role_id,city_id,identity_type,account_status,password_hash) VALUES($1,$2,$3,'+923001234567',$4,$5,'login_account','active',$6)`,[id,name,email,role,city,hash]);
   await fixtures.query(`INSERT INTO riders VALUES('QA-R1','QA-RIDER','Active','North'),('QA-R2','QA-OTHER','Active','Central');
     INSERT INTO donation_boxes(box_id,qr_code,city_id,area,location_type,location_description,assigned_rider_id,installation_date,box_status,security_level)
     VALUES('QA-BOX1','QR-QA-1','C001','Gulshan','Shop','Fixture street','QA-R1','2026-01-01','Active','Standard'),
@@ -60,6 +62,19 @@ try {
       ('QA-VISIT','QA-R1','QA-DAMAGED','2026-11-11','Follow-up Visit','Assigned'),
       ('QA-CANCEL','QA-R1','QA-BOX1','2026-11-11','Scheduled Collection','Cancelled'),
       ('QA-SKIP','QA-R1','QA-BOX1','2026-11-11','Scheduled Collection','Skipped');`);
+  if(process.env.FLOW_ACCOUNT_RENAME==='1') {
+    await fixtures.query(`ALTER TABLE team_members RENAME TO users;
+      ALTER TABLE users RENAME COLUMN team_record_id TO id;
+      ALTER TABLE users RENAME COLUMN team_id TO user_id;
+      ALTER TABLE riders RENAME COLUMN team_id TO user_id;
+      ALTER TABLE collections RENAME COLUMN recorded_by_team_id TO recorded_by_user_id;
+      ALTER TABLE activity_audit_log RENAME COLUMN actor_team_id TO actor_user_id`);
+    const migration=(await fs.readFile('database/migrate_team_members.sql','utf8')).replaceAll('public.',`${schema}.`).replaceAll("'public'",`'${schema}'`);
+    await fixtures.query(migration);await fixtures.query(migration);
+    assert.equal((await fixtures.query('SELECT count(*)::int AS count FROM team_members')).rows[0].count,5);
+    assert.equal((await fixtures.query("SELECT to_regclass($1)::text AS legacy",[`${schema}.users`])).rows[0].legacy,null);
+    console.log('PASS users renamed to physical team_members, migration idempotent, original account rows and foreign keys retained');
+  }
   server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3117'],{
     cwd:process.cwd(),windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,DATABASE_URL:fixtureUrl.toString(),AUTH_SECRET:fixtureSecret}});
   server.stderr?.on('data',chunk=>{serverLog=(serverLog+String(chunk)).slice(-12000);});
@@ -80,7 +95,7 @@ try {
   for(const query of ['from=2026-02-30','from=2026-11-12&to=2026-11-11','page=-1']) await call(`/api/dashboard/admin/collections?${query}`,400,{session:cityAdmin});
 
   for(const path of ['/api/dashboard/boxes','/api/dashboard/rider-assignments','/api/reports/import']) await call(path,403,{session:superAdmin,method:'POST',json:{}});
-  await call('/api/team-accounts',403,{session:superAdmin,method:'DELETE',json:{}});
+  await call('/api/team-accounts',400,{session:superAdmin,method:'DELETE',json:{}});
   await call('/api/dashboard/boxes/QA-BOX1',403,{session:superAdmin,method:'PATCH',json:{status:'Inactive',reason:'Test'}});
   for(const role of ['city_manager','rider']) await call('/api/team-accounts',403,{session:superAdmin,method:'POST',json:account('Denied',`${role}@example.invalid`,role)});
   await call('/api/team-accounts',201,{session:superAdmin,method:'POST',json:account('New City','newcity@example.invalid','admin','C003')});
@@ -92,7 +107,7 @@ try {
   await call('/api/admins',201,{session:superAdmin,method:'POST',json:account('Legacy City','legacycity@example.invalid','admin','C003')});
   const legacyCity=await login('legacycity@example.invalid');assert.equal(legacyCity.redirect,'/dashboard/admin');
   await call('/api/team-accounts',201,{session:cityAdmin,method:'POST',json:account('New Branch','newbranch@example.invalid','city_manager','C002')});
-  assert.equal((await fixtures.query("SELECT city_id FROM users WHERE email='newbranch@example.invalid'")).rows[0].city_id,'C001');
+  assert.equal((await fixtures.query("SELECT city_id FROM team_members WHERE email='newbranch@example.invalid'")).rows[0].city_id,'C001');
   const newBranch=await login('newbranch@example.invalid');assert.equal(newBranch.redirect,'/dashboard/manager');
   const team=await (await call('/api/team-accounts',200,{session:cityAdmin})).json();const branchAccount=team.accounts.find((account:{email:string})=>account.email==='newbranch@example.invalid');assert.equal(branchAccount.role,'Branch Admin');
   await call('/api/team-accounts',200,{session:cityAdmin,method:'DELETE',json:{userId:branchAccount.id,confirmedEmail:'newbranch@example.invalid'}});
@@ -114,7 +129,37 @@ try {
     await fixtures.query("UPDATE roles SET role_key=CASE role_key WHEN 'admin' THEN 'city_admin' WHEN 'city_manager' THEN 'branch_admin' ELSE role_key END");
     console.log('PASS live database role aliases and canonical role keys: create, login, list and scoped deletion');
   }
-  console.log('PASS account provisioning hierarchy, city enforcement, Super Admin read-only and origin checks');
+  const edit={userId:createdRider.account.id,name:'Updated Rider',email:'newrider@example.invalid',phone:'+923009876543',accountStatus:'active',assignedZone:'Updated zone',employmentStatus:'Active'};
+  await call('/api/team-accounts',200,{session:branch,method:'PATCH',json:edit});
+  const persisted=(await fixtures.query('SELECT u.full_name,u.phone,r.assigned_zone FROM team_members u JOIN riders r USING(team_id) WHERE u.team_id=$1',[createdRider.account.id])).rows[0];
+  assert.equal(persisted.full_name,'Updated Rider');assert.equal(persisted.phone,edit.phone);assert.equal(persisted.assigned_zone,edit.assignedZone);
+  await call('/api/team-accounts',403,{session:other,method:'PATCH',json:edit});
+  await call('/api/team-accounts',403,{session:newCity,method:'PATCH',json:edit});
+  await call('/api/team-accounts',403,{session:rider,method:'PATCH',json:edit});
+  await call('/api/team-accounts',200,{session:superAdmin,method:'PATCH',json:edit});
+  await call('/api/team-accounts',403,{session:branch,method:'PATCH',origin:'https://invalid.example',json:edit});
+  await call('/api/team-accounts',400,{session:branch,method:'PATCH',json:{...edit,role:'admin'}});
+  await call('/api/team-accounts',400,{session:branch,method:'PATCH',json:{...edit,name:'x'}});
+  await call('/api/team-accounts',409,{session:branch,method:'PATCH',json:{...edit,email:'branch@example.invalid'}});
+  assert.equal((await fixtures.query('SELECT email FROM team_members WHERE team_id=$1',[edit.userId])).rows[0].email,edit.email);
+  await call('/api/team-accounts',200,{session:branch,method:'PATCH',json:{...edit,accountStatus:'inactive',employmentStatus:'Inactive'}});
+  await call('/api/auth/login',401,{method:'POST',json:{email:edit.email,password}});
+  await call('/api/team-accounts',200,{session:branch,method:'PATCH',json:edit});
+  const managedCity=await (await call('/api/team-accounts',201,{session:superAdmin,method:'POST',json:account('Managed City','managedcity@example.invalid','admin','C003')})).json();
+  const cityEdit={...edit,userId:managedCity.account.id,name:'Edited City',email:'managedcity@example.invalid'};
+  await call('/api/team-accounts',200,{session:superAdmin,method:'PATCH',json:cityEdit});
+  await call('/api/team-accounts',403,{session:cityAdmin,method:'PATCH',json:cityEdit});
+  await call('/api/team-accounts',200,{session:superAdmin,method:'DELETE',json:{userId:managedCity.account.id,confirmedEmail:cityEdit.email}});
+  await call('/api/auth/login',401,{method:'POST',json:{email:cityEdit.email,password}});
+  await call('/api/team-accounts',404,{session:superAdmin,method:'PATCH',json:cityEdit});
+  const managedBranch=await (await call('/api/team-accounts',201,{session:cityAdmin,method:'POST',json:account('Managed Branch','managedbranch@example.invalid','city_manager')})).json();
+  await call('/api/team-accounts',200,{session:superAdmin,method:'PATCH',json:{...edit,userId:managedBranch.account.id,name:'Edited Branch',email:'managedbranch@example.invalid'}});
+  await call('/api/team-accounts',200,{session:superAdmin,method:'DELETE',json:{userId:managedBranch.account.id,confirmedEmail:'managedbranch@example.invalid'}});
+  await call('/api/auth/login',401,{method:'POST',json:{email:'managedbranch@example.invalid',password}});
+  const managedRider=await (await call('/api/team-accounts',201,{session:branch,method:'POST',json:account('Managed Rider','managedrider@example.invalid','rider')})).json();
+  await call('/api/team-accounts',200,{session:superAdmin,method:'DELETE',json:{userId:managedRider.account.id,confirmedEmail:'managedrider@example.invalid'}});
+  await call('/api/auth/login',401,{method:'POST',json:{email:'managedrider@example.invalid',password}});
+  console.log('PASS persisted team edits, duplicate rollback, role/city/origin guards, login deactivation and scoped City Admin removal');
   if(accountsOnly){console.log(`${checks} isolated account HTTP checks passed.`);return;}
 
   await call('/api/dashboard/boxes',201,{session:cityAdmin,method:'POST',json:{boxId:'QA-NEW-BOX',qrCode:'QR-QA-NEW-BOX',cityId:'C002',district:'Karachi East',area:'Gulshan',locationType:'Shop',locationDescription:'New test location',installationDate:'2026-11-11',securityLevel:'Standard',assignedRiderId:'QA-R1'}});
@@ -177,18 +222,18 @@ try {
   assert.equal((await fixtures.query("SELECT COUNT(*)::int AS count FROM box_status_history WHERE box_id='QA-DAMAGED'")).rows[0].count,1);
   console.log('PASS review/flag/lock audit flow, cross-city denial, simultaneous cash submissions and box status history');
 
-  const newRiderId=(await fixtures.query('SELECT rider_id FROM riders WHERE user_id=$1',[createdRider.account.id])).rows[0].rider_id;
+  const newRiderId=(await fixtures.query('SELECT rider_id FROM riders WHERE team_id=$1',[createdRider.account.id])).rows[0].rider_id;
   const newTask=await (await call('/api/dashboard/rider-assignments',201,{session:branch,method:'POST',json:{riderId:newRiderId,boxId:'QA-BOX1',taskDate:'2026-11-11',taskType:'Scheduled Collection'}})).json();
   await call(`/api/dashboard/tasks/${newTask.taskId}/collection`,201,{session:newRider,method:'POST',json:{amount:'55'}});
   await call('/api/team-accounts',200,{session:cityAdmin,method:'DELETE',json:{userId:createdRider.account.id,confirmedEmail:'newrider@example.invalid'}});
   await call('/api/auth/login',401,{method:'POST',json:{email:'newrider@example.invalid',password}});
   await call(`/api/dashboard/tasks/${newTask.taskId}`,401,{session:newRider,method:'PATCH',json:{status:'Skipped'}});
   assert.equal((await fixtures.query('SELECT count(*)::int AS count FROM collections WHERE rider_id=$1',[newRiderId])).rows[0].count,1);
-  await fixtures.query("UPDATE users SET city_id='C002' WHERE user_id='QA-CITY'");
+  await fixtures.query("UPDATE team_members SET city_id='C002' WHERE team_id='QA-CITY'");
   await call('/api/dashboard/admin/collections',401,{session:cityAdmin});
-  await fixtures.query("UPDATE users SET city_id='C001',role_id=4 WHERE user_id='QA-CITY'");
+  await fixtures.query("UPDATE team_members SET city_id='C001',role_id=4 WHERE team_id='QA-CITY'");
   await call('/api/dashboard/admin/collections',401,{session:cityAdmin});
-  await fixtures.query("UPDATE users SET role_id=2 WHERE user_id='QA-CITY'");
+  await fixtures.query("UPDATE team_members SET role_id=2 WHERE team_id='QA-CITY'");
   await fixtures.query("UPDATE riders SET employment_status='Inactive' WHERE rider_id='QA-R1'");
   await call('/api/dashboard/tasks/QA-SKIP/collection',404,{session:rider,method:'POST',json:{amount:'1'}});
   await fixtures.query("UPDATE riders SET employment_status='Active' WHERE rider_id='QA-R1'");

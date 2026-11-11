@@ -26,7 +26,7 @@ async function handlePATCH(request: Request, context: { params: Promise<{ taskId
     const result = await client.query<{ task_id: string; task_status: string;task_type:string }>(`
       SELECT task.task_id, task.task_status,task.task_type FROM rider_tasks task
       JOIN riders rider ON rider.rider_id = task.rider_id
-      WHERE task.task_id = $1 AND rider.user_id = $2 AND rider.employment_status='Active' FOR UPDATE OF task
+      WHERE task.task_id = $1 AND rider.team_id = $2 AND rider.employment_status='Active' FOR UPDATE OF task
     `, [taskId, session.userId]);
     const current = result.rows[0];
     if (!current) {
@@ -44,7 +44,7 @@ async function handlePATCH(request: Request, context: { params: Promise<{ taskId
     }
     await client.query(`UPDATE rider_tasks SET task_status = $2::text, notes = CASE WHEN $3::text = '' THEN notes ELSE CONCAT_WS(CHR(10), notes, 'Rider update: ' || $3::text) END, completion_time = CASE WHEN $2::text = 'Completed' THEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time ELSE NULL END WHERE task_id = $1`, [taskId, status, notes]);
     await client.query(`
-      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_user_id, before_data, after_data)
+      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'rider_task', $2, 'status_updated', $3, $4::jsonb, $5::jsonb)
     `, [randomBytes(16).toString("hex"), taskId, session.userId, JSON.stringify({ status: current.task_status }), JSON.stringify({ status, notes })]);
     await client.query("COMMIT");

@@ -40,11 +40,11 @@ async function handlePATCH(request: Request, context: { params: Promise<{ boxId:
     }
     await client.query("UPDATE donation_boxes SET box_status = $2 WHERE box_id = $1", [boxId, status]);
     await client.query(`
-      INSERT INTO box_status_history (history_id, box_id, previous_status, new_status, changed_on, changed_by_user_id, reason)
+      INSERT INTO box_status_history (history_id, box_id, previous_status, new_status, changed_on, changed_by_team_id, reason)
       VALUES ($1, $2, $3, $4, CURRENT_DATE, $5, $6)
     `, [randomBytes(8).toString("hex").toUpperCase(), boxId, current.box_status, status, session.userId, reason]);
     await client.query(`
-      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_user_id, before_data, after_data)
+      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'donation_box', $2, 'status_changed', $3, $4::jsonb, $5::jsonb)
     `, [randomBytes(16).toString("hex"), boxId, session.userId, JSON.stringify({ status: current.box_status }), JSON.stringify({ status, reason })]);
     await client.query("COMMIT");

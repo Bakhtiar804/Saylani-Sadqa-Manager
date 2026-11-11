@@ -13,7 +13,7 @@ async function handlePATCH(request:Request,context:{params:Promise<{boxId:string
  try {await client.query('BEGIN');const current=(await client.query<{district:string|null}>('SELECT district FROM donation_boxes WHERE box_id=$1 AND city_id=$2 FOR UPDATE',[boxId,session.cityId])).rows[0];
  if(!current){await client.query('ROLLBACK');return Response.json({error:'This box is not available in your city.'},{status:404});}
  await client.query('UPDATE donation_boxes SET district=$2 WHERE box_id=$1',[boxId,district]);
- await client.query("INSERT INTO activity_audit_log(audit_id,entity_type,entity_id,action,actor_user_id,before_data,after_data) VALUES($1,'donation_box',$2,'district_assigned',$3,$4::jsonb,$5::jsonb)",[randomBytes(16).toString('hex'),boxId,session.userId,JSON.stringify({district:current.district}),JSON.stringify({district})]);
+ await client.query("INSERT INTO activity_audit_log(audit_id,entity_type,entity_id,action,actor_team_id,before_data,after_data) VALUES($1,'donation_box',$2,'district_assigned',$3,$4::jsonb,$5::jsonb)",[randomBytes(16).toString('hex'),boxId,session.userId,JSON.stringify({district:current.district}),JSON.stringify({district})]);
  await client.query('COMMIT');revalidateTag('dashboard-db-records',{expire:0});return Response.json({district},{headers:{'Cache-Control':'no-store'}});
  }catch(error){await client.query('ROLLBACK').catch(()=>undefined);throw error;}finally{client.release();}
 }

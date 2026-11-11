@@ -11,7 +11,7 @@ const roles = ["super_admin", "admin", "city_manager", "rider"] as const;
 type Role = (typeof roles)[number];
 
 type Account = {
-  user_id: string;
+  team_id: string;
   full_name: string;
   email: string;
   city_id: string | null;
@@ -70,9 +70,9 @@ async function getRoleFixtures() {
   try {
     const result = await pool.query<Account>(`
       SELECT DISTINCT ON (role.role_key)
-        user_record.user_id, user_record.full_name, user_record.email,
+        user_record.team_id, user_record.full_name, user_record.email,
         user_record.city_id, role.role_key
-      FROM users AS user_record
+      FROM team_members AS user_record
       JOIN roles AS role ON role.role_id = user_record.role_id
       WHERE user_record.identity_type = 'login_account'
         AND user_record.account_status = 'active'
@@ -80,11 +80,11 @@ async function getRoleFixtures() {
         AND role.role_key IN ('super_admin', 'admin', 'city_manager', 'rider')
         AND (role.role_key = 'super_admin' OR user_record.city_id IS NOT NULL)
         AND (role.role_key <> 'rider' OR EXISTS (
-          SELECT 1 FROM riders WHERE riders.user_id = user_record.user_id
+          SELECT 1 FROM riders WHERE riders.team_id = user_record.team_id
         ))
       ORDER BY role.role_key,
         EXISTS (SELECT 1 FROM collections WHERE collections.city_id = user_record.city_id) DESC,
-        user_record.created_at DESC, user_record.user_id
+        user_record.created_at DESC, user_record.team_id
     `);
     const accounts = new Map(result.rows.map((row) => [row.role_key, row]));
     const missing = roles.filter((role) => !accounts.has(role));
@@ -105,7 +105,7 @@ async function getRoleFixtures() {
 
 function sessionCookie(account: Account, secret: string) {
   const payload = Buffer.from(JSON.stringify({
-    userId: account.user_id,
+    userId: account.team_id,
     email: account.email,
     name: account.full_name,
     role: account.role_key,
@@ -361,7 +361,7 @@ if (roleFixtures) {
       path: "/api/team-accounts",
       status: 403,
       method: "DELETE",
-      body: { userId: fixtures[role].user_id, confirmedEmail: fixtures[role].email },
+      body: { userId: fixtures[role].team_id, confirmedEmail: fixtures[role].email },
       cookie: sessionCookie(fixtures[role], secret),
     });
   }

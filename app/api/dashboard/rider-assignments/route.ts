@@ -36,7 +36,7 @@ async function handlePOST(request: Request) {
     await client.query("BEGIN");
     const riderResult = await client.query<{ rider_id: string; city_id: string }>(`
       SELECT rider.rider_id, account.city_id
-      FROM riders rider JOIN users account USING (user_id)
+      FROM riders rider JOIN team_members account USING (team_id)
       WHERE rider.rider_id = $1 AND rider.employment_status = 'Active'
         AND account.account_status = 'active' AND account.deleted_at IS NULL
       FOR UPDATE OF rider
@@ -74,7 +74,7 @@ async function handlePOST(request: Request) {
       VALUES ($1, $2, $3, $4, $5, 'Assigned')
     `, [taskId, riderId, boxId, taskDate, taskType]);
     await client.query(`
-      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_user_id, before_data, after_data)
+      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'rider_task', $2, 'assigned', $3, NULL, $4::jsonb)
     `, [randomBytes(16).toString("hex"), taskId, session.userId, JSON.stringify({ riderId, boxId, taskDate, taskType, status: "Assigned" })]);
     await client.query("COMMIT");

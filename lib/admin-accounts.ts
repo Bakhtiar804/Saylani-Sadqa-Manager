@@ -6,7 +6,7 @@ import { getDatabasePool } from "@/lib/db";
 import type { AppRole } from "@/lib/session";
 import type { UserSession } from "@/lib/session";
 import type { QueryResultRow } from "pg";
-import { deletableRoles } from './permissions';
+import { deletableRoles, editableRoles } from './permissions';
 
 export type TeamRole = "admin" | "city_manager" | "rider";
 export type TeamAccount = {
@@ -39,23 +39,23 @@ export async function listTeamAccounts(session: UserSession): Promise<TeamAccoun
     filter += session.role === "admin" ? " AND r.role_key IN ('city_manager', 'branch_admin', 'rider')" : " AND r.role_key = 'rider'";
   }
   const result = await getDatabasePool().query<QueryResultRow & {
-    user_id: string; full_name: string; email: string; phone: string; role_key: TeamRole;
+    team_id: string; full_name: string; email: string; phone: string; role_key: TeamRole;
     city_id: string | null; city_name: string | null;
     assigned_zone: string | null; account_status: TeamAccount["accountStatus"];
     employment_status: TeamAccount["employmentStatus"]; created_at: Date | null;
   }>(`
-    SELECT u.user_id, u.full_name, u.email, u.phone, u.account_status,
+    SELECT u.team_id, u.full_name, u.email, u.phone, u.account_status,
       CASE r.role_key WHEN 'city_admin' THEN 'admin' WHEN 'branch_admin' THEN 'city_manager' ELSE r.role_key END AS role_key, u.city_id, city.city_name,
       rider.assigned_zone, rider.employment_status, u.created_at
-    FROM users u
+    FROM team_members u
     JOIN roles r ON r.role_id = u.role_id
     LEFT JOIN cities city ON city.city_id = u.city_id
-    LEFT JOIN riders rider ON rider.user_id = u.user_id
+    LEFT JOIN riders rider ON rider.team_id = u.team_id
     WHERE u.identity_type = 'login_account' AND u.deleted_at IS NULL AND ${filter}
     ORDER BY u.created_at DESC, u.full_name
   `, parameters);
   return result.rows.map((row) => ({
-    id: row.user_id, name: row.full_name, email: row.email, phone: row.phone,
+    id: row.team_id, name: row.full_name, email: row.email, phone: row.phone,
     role: getTeamRoleLabel(row.role_key), cityId: row.city_id, cityName: row.city_name,
     zone: row.assigned_zone, accountStatus: row.account_status,
     employmentStatus: row.employment_status, createdAt: row.created_at?.toISOString() ?? null,
@@ -74,12 +74,7 @@ export async function softDeleteTeamAccount(input: {
   confirmedEmail: string;
   actor: UserSession;
 }): Promise<void> {
-  const deleteRoles: Partial<Record<AppRole, readonly TeamRole[]>> = {
-    super_admin: [],
-    admin: ["city_manager", "rider"],
-    city_manager: ["rider"],
-  };
-  const allowedTargets = deleteRoles[input.actor.role];
+  const allowedTargets = deletableRoles[input.actor.role];
   if (!allowedTargets?.length || !deletableRoles[input.actor.role].length) throw new TeamAccountDeleteError("You cannot delete team accounts.", 403);
 
   if (input.userId === input.actor.userId) {
@@ -92,12 +87,12 @@ export async function softDeleteTeamAccount(input: {
     await client.query("BEGIN");
     transactionOpen = true;
     const result = await client.query<QueryResultRow & {
-      user_id: string; email: string; city_id: string | null; role_key: string;
+      team_id: string; email: string; city_id: string | null; role_key: string;
     }>(`
-      SELECT u.user_id, u.email, u.city_id, role.role_key
-      FROM users u
+      SELECT u.team_id, u.email, u.city_id, role.role_key
+      FROM team_members u
       JOIN roles role ON role.role_id = u.role_id
-      WHERE u.user_id = $1
+      WHERE u.team_id = $1
         AND u.identity_type = 'login_account'
         AND u.deleted_at IS NULL
       FOR UPDATE
@@ -116,12 +111,12 @@ export async function softDeleteTeamAccount(input: {
     }
 
     await client.query(`
-      UPDATE users
+      UPDATE team_members
       SET account_status = 'inactive', deleted_at = CURRENT_TIMESTAMP
-      WHERE user_id = $1
-    `, [target.user_id]);
+      WHERE team_id = $1
+    `, [target.team_id]);
     if (target.role_key === "rider") {
-      await client.query("UPDATE riders SET employment_status = 'Inactive' WHERE user_id = $1", [target.user_id]);
+      await client.query("UPDATE riders SET employment_status = 'Inactive' WHERE team_id = $1", [target.team_id]);
     }
     await client.query("COMMIT");
     transactionOpen = false;
@@ -136,10 +131,33 @@ export async function softDeleteTeamAccount(input: {
   }
 }
 
+export async function updateTeamAccount(input:{userId:string;name:string;email:string;phone:string;accountStatus:TeamAccount['accountStatus'];assignedZone:string;employmentStatus:string;actor:UserSession}):Promise<TeamAccount> {
+  if(input.userId===input.actor.userId || !editableRoles[input.actor.role].length) throw new TeamAccountDeleteError('You cannot edit this account.',403);
+  const client=await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const {rows:[target]}=await client.query<{role_key:string;city_id:string|null}>(`SELECT r.role_key,u.city_id FROM team_members u JOIN roles r USING(role_id) WHERE u.team_id=$1 AND u.identity_type='login_account' AND u.deleted_at IS NULL FOR UPDATE OF u`,[input.userId]);
+    if(!target) throw new TeamAccountDeleteError('This account was not found or has been removed.',404);
+    const role=normalizeLoginRole(target.role_key);
+    if(!role || !editableRoles[input.actor.role].includes(role as TeamRole) || (input.actor.role!=='super_admin'&&(!input.actor.cityId||target.city_id!==input.actor.cityId))) throw new TeamAccountDeleteError('You cannot edit this role or accounts outside your city.',403);
+    if(role==='rider'&&(!input.assignedZone||input.assignedZone.length>80||!['Active','Inactive'].includes(input.employmentStatus))) throw new TeamAccountDeleteError('Enter a rider zone and valid employment status.',400);
+    await client.query(`UPDATE team_members SET full_name=$2,email=$3,phone=$4,account_status=$5 WHERE team_id=$1`,[input.userId,input.name,input.email,input.phone,input.accountStatus]);
+    if(role==='rider') {
+      const updated=await client.query('UPDATE riders SET assigned_zone=$2,employment_status=$3 WHERE team_id=$1',[input.userId,input.assignedZone,input.employmentStatus]);
+      if(updated.rowCount!==1) throw new TeamAccountDeleteError('Rider profile is missing. Contact your administrator.',409);
+    }
+    await client.query('COMMIT');
+  } catch(error) {await client.query('ROLLBACK');throw error;} finally {client.release();}
+  revalidateTag('dashboard-db-records',{expire:0});
+  const account=(await listTeamAccounts(input.actor)).find(account=>account.id===input.userId);
+  if(!account) throw new Error('Saved account could not be loaded.');
+  return account;
+}
+
 export async function isActiveLoginAccount(userId: string): Promise<boolean> {
   const result = await getDatabasePool().query(`
-    SELECT 1 FROM users
-    WHERE user_id = $1
+    SELECT 1 FROM team_members
+    WHERE team_id = $1
       AND identity_type = 'login_account'
       AND account_status = 'active'
       AND deleted_at IS NULL
@@ -150,8 +168,8 @@ export async function isActiveLoginAccount(userId: string): Promise<boolean> {
 
 export async function isCurrentLoginSession(session: UserSession): Promise<boolean> {
   const result=await getDatabasePool().query<{role_key:string;city_id:string|null}>(`
-    SELECT role.role_key,account.city_id FROM users account JOIN roles role USING(role_id)
-    WHERE account.user_id=$1 AND account.identity_type='login_account'
+    SELECT role.role_key,account.city_id FROM team_members account JOIN roles role USING(role_id)
+    WHERE account.team_id=$1 AND account.identity_type='login_account'
       AND account.account_status='active' AND account.deleted_at IS NULL LIMIT 1`,[session.userId]);
   const account=result.rows[0];
   return Boolean(account && normalizeLoginRole(account.role_key)===session.role && account.city_id===session.cityId);
@@ -168,16 +186,16 @@ export async function createTeamAccount(input: {
   try {
     if (client) await client.query("BEGIN");
     const result = await (client ?? pool).query<QueryResultRow & {
-      user_id: string; full_name: string; email: string; phone: string; role_key: TeamRole;
+      team_id: string; full_name: string; email: string; phone: string; role_key: TeamRole;
       city_id: string; city_name: string;
       account_status: TeamAccount["accountStatus"]; created_at: Date;
     }>(`
-      INSERT INTO users (user_id, full_name, email, phone, city_id, role_id, identity_type, account_status, password_hash)
+      INSERT INTO team_members (team_id, full_name, email, phone, city_id, role_id, identity_type, account_status, password_hash)
       VALUES ($1, $2, $3, $4, $5,
         (SELECT role_id FROM roles WHERE role_key IN ($6::text, $9::text)
          ORDER BY CASE WHEN role_key = $6::text THEN 0 ELSE 1 END LIMIT 1),
         'login_account', $7, $8)
-      RETURNING user_id, full_name, email, phone, city_id, account_status, created_at,
+      RETURNING team_id, full_name, email, phone, city_id, account_status, created_at,
         $6::VARCHAR AS role_key,
         (SELECT city_name FROM cities WHERE city_id = $5) AS city_name
     `, [userId, input.name, input.email.toLowerCase(), input.phone, input.cityId, input.role, input.accountStatus, input.passwordHash,
@@ -186,14 +204,14 @@ export async function createTeamAccount(input: {
     if (!account) throw new Error("Account could not be created. Check that the selected role and city exist.");
     if (client) {
       await client.query(`
-        INSERT INTO riders (rider_id, user_id, employment_status, assigned_zone)
+        INSERT INTO riders (rider_id, team_id, employment_status, assigned_zone)
         VALUES ($1, $2, $3, $4)
       `, [riderId, userId, input.employmentStatus, input.assignedZone]);
       await client.query("COMMIT");
     }
     revalidateTag("dashboard-db-records", { expire: 0 });
     return {
-      id: account.user_id, name: account.full_name, email: account.email, phone: account.phone,
+      id: account.team_id, name: account.full_name, email: account.email, phone: account.phone,
       role: getTeamRoleLabel(account.role_key), cityId: account.city_id, cityName: account.city_name,
       zone: input.role === "rider" ? input.assignedZone ?? null : null,
       accountStatus: account.account_status,
@@ -209,7 +227,7 @@ export async function createTeamAccount(input: {
 }
 
 type DatabaseAdmin = QueryResultRow & {
-  user_id: string;
+  team_id: string;
   full_name: string;
   email: string;
   password_hash?: string;
@@ -247,10 +265,10 @@ export async function findLoginAccountByEmail(email: string): Promise<{
     account_status: string;
     identity_type: string;
   }>(`
-    SELECT u.user_id, u.full_name, u.email, u.password_hash, u.created_at,
+    SELECT u.team_id, u.full_name, u.email, u.password_hash, u.created_at,
            u.city_id, u.account_status, u.identity_type,
            r.role_key, r.display_name
-    FROM users AS u
+    FROM team_members AS u
     JOIN roles AS r ON r.role_id = u.role_id
     WHERE LOWER(u.email) = $1
       AND u.identity_type = 'login_account'
@@ -264,7 +282,7 @@ export async function findLoginAccountByEmail(email: string): Promise<{
   if (!role) return null;
 
   return {
-    id: user.user_id,
+    id: user.team_id,
     email: user.email,
     name: user.full_name,
     passwordHash: user.password_hash,

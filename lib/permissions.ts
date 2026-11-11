@@ -4,8 +4,9 @@ export const creatableRoles: Record<AppRole, readonly ('admin' | 'city_manager' 
   super_admin: ['admin'], admin: ['city_manager', 'rider'], city_manager: ['rider'], rider: [],
 };
 export const deletableRoles: Record<AppRole, readonly ('admin' | 'city_manager' | 'rider')[]> = {
-  super_admin: [], admin: ['city_manager', 'rider'], city_manager: ['rider'], rider: [],
+  super_admin: ['admin', 'city_manager', 'rider'], admin: ['city_manager', 'rider'], city_manager: ['rider'], rider: [],
 };
+export const editableRoles = deletableRoles;
 export function canOperate(role: AppRole) { return role === 'admin' || role === 'city_manager'; }
 export function canRegisterBox(role: AppRole) { return role === 'admin'; }
 export function canImportReports(role: AppRole) { return role === 'admin' || role === 'city_manager'; }

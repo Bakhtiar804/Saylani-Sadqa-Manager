@@ -25,7 +25,7 @@ assert.equal(parsed.rows.filter(row=>row.kind==='expense' && row.amount===null).
 assert.ok(parsed.rows.some(row=>row.kind==='collection' && row.amount==='0'));
 await assert.rejects(()=>parseExcelReports(Buffer.from('not an xlsx')),/invalid|large/i);
 console.log('PASS TypeScript Excel parsing: original row counts, blanks, dashes, zeroes and invalid file');
-assert.deepEqual(creatableRoles.super_admin,['admin']);assert.deepEqual(deletableRoles.super_admin,[]);
+assert.deepEqual(creatableRoles.super_admin,['admin']);assert.deepEqual(deletableRoles.super_admin,['admin','city_manager','rider']);
 assert.equal(canOperate('super_admin'),false);assert.equal(canImportReports('super_admin'),false);
 assert.equal(canImportReports('admin'),true);assert.equal(canImportReports('city_manager'),true);
 assert.equal(previousReportingMonth(new Date('2026-01-01T12:00:00Z')),'2025-12');
@@ -51,9 +51,9 @@ try {
   isolated=new pg.Pool({...config,options:`-c search_path=${schema}`});
   globalThis.saylaniDatabasePool=isolated;
   await isolated.query(`CREATE TABLE cities(city_id VARCHAR(16) PRIMARY KEY,city_name VARCHAR(100) UNIQUE NOT NULL,province VARCHAR(100) NOT NULL);
-    CREATE TABLE users(user_id VARCHAR(40) PRIMARY KEY,full_name TEXT,email TEXT,phone TEXT,city_id VARCHAR(16),created_at TIMESTAMPTZ DEFAULT NOW(),account_status TEXT DEFAULT 'active');
+    CREATE TABLE team_members(team_id VARCHAR(40) PRIMARY KEY,full_name TEXT,email TEXT,phone TEXT,city_id VARCHAR(16),created_at TIMESTAMPTZ DEFAULT NOW(),account_status TEXT DEFAULT 'active');
     INSERT INTO cities VALUES('C001','Karachi','Sindh'),('C002','Lahore','Punjab');
-    INSERT INTO users(user_id,full_name,email,phone,city_id) VALUES('TEST-ADMIN','Test Admin','test@example.invalid','000000000','C001'),('TEST-R1','Rider One','one@example.invalid','000000001','C001'),('TEST-R2','Rider Two','two@example.invalid','000000002','C002');`);
+    INSERT INTO team_members(team_id,full_name,email,phone,city_id) VALUES('TEST-ADMIN','Test Admin','test@example.invalid','000000000','C001'),('TEST-R1','Rider One','one@example.invalid','000000001','C001'),('TEST-R2','Rider Two','two@example.invalid','000000002','C002');`);
   await isolated.query(await fs.readFile('database/migrate_monthly_reports.sql','utf8'));
   await isolated.query(await fs.readFile('database/migrate_report_uploads.sql','utf8'));
   const actor:UserSession={userId:'TEST-ADMIN',name:'Test Admin',email:'test@example.invalid',cityId:'C001',role:'admin',expiresAt:Date.now()+60000};
@@ -75,7 +75,7 @@ try {
   assert.equal((await isolated.query('SELECT count(*)::int AS count FROM report_import_batches')).rows[0].count,batchesBefore);
   console.log('PASS isolated PostgreSQL import: city exclusion, business-key upsert, idempotency, backups and rollback');
 
-  await isolated.query(`CREATE TABLE riders(rider_id TEXT PRIMARY KEY,user_id TEXT,assigned_zone TEXT,employment_status TEXT);
+  await isolated.query(`CREATE TABLE riders(rider_id TEXT PRIMARY KEY,team_id TEXT,assigned_zone TEXT,employment_status TEXT);
     CREATE TABLE donation_boxes(box_id TEXT PRIMARY KEY,qr_code TEXT,city_id TEXT,area TEXT,box_status TEXT,location_description TEXT,assigned_rider_id TEXT);
     CREATE TABLE collections(collection_id TEXT PRIMARY KEY,rider_id TEXT,collection_date DATE,box_id TEXT,city_id TEXT,collection_amount_pkr NUMERIC,cash_handover_status TEXT,deposit_status TEXT);
     CREATE TABLE rider_tasks(task_id TEXT,rider_id TEXT,task_status TEXT,task_date DATE,box_id TEXT,task_type TEXT);
