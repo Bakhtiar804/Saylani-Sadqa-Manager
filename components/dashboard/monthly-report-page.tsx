@@ -11,6 +11,9 @@ import { BreakdownBarChart, CollectionTrendChart } from './charts';
 import RecordExplorer from './record-explorer';
 import NetworkTree from './network-tree';
 import { getNetworkTree } from '@/lib/network-tree';
+import { buildExpenseTrend } from '@/lib/expense-trend';
+import AutoFilterForm from './auto-filter-form';
+import ReportAnalytics from './report-analytics';
 
 export type ReportPageProps = { searchParams: Promise<MonthlyReportFilters> };
 const fieldClass = 'h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm text-[#203526]';
@@ -30,6 +33,7 @@ export default async function MonthlyReportPage({searchParams,view='overview'}: 
   const data = await getMonthlyReports(filters,scope);
   const base = session.role==='admin'?'/dashboard/admin':session.role==='city_manager'?'/dashboard/manager':'/dashboard';
   const cityName = scope.network ? options.cities.find(city=>city.city_id===data.cityId)?.city_name || 'All reporting cities' : options.cities[0]?.city_name || 'Assigned city';
+  const expenseTrend=buildExpenseTrend(data.monthly,data.year);
   const period = data.monthly.length ? `${data.monthly[0].month} to ${data.monthly.at(-1)!.month}` : 'No reports in this selection';
   const noData = view==='expenses' ? !data.expenses.length : view==='coverage' ? !data.latestBoxes.length && !data.staff.length : !data.collections.length;
   const amountLabel = (rows: typeof data.collections,total: number) => rows.some(row=>row.amount_pkr!==null) ? formatPKR(total) : 'Not reported';
@@ -40,13 +44,12 @@ export default async function MonthlyReportPage({searchParams,view='overview'}: 
   const tree = view==='coverage' ? await getNetworkTree(scope,{cityId:data.cityId,month:data.latestMonth,channel:data.channel,year:data.year}) : null;
   return <>
     <PageHeading eyebrow={`${cityName} · ${period}`} title={titles[view]} description="Actual monthly figures supplied · Public & branch reporting." actions={view==='coverage'?<Link href={`${base}/inventory`} className="rounded-xl bg-[#276431] px-4 py-3 text-sm font-semibold text-white">Open box inventory →</Link>:undefined}/>
-    <form className="mb-6 flex flex-wrap items-end gap-3 rounded-2xl border border-[#e3ebe0] bg-white p-4">
+    <AutoFilterForm path={base+({overview:'',collections:'/collections',expenses:'/finance',coverage:'/boxes',analytics:'/analytics'} as const)[view]} stateKey={JSON.stringify([data.year,data.cityId,data.channel])} className="mb-6 flex flex-wrap items-end gap-3 rounded-2xl border border-[#e3ebe0] bg-white p-4">
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Year<select name="year" defaultValue={data.year} className={fieldClass}><option value="all">All available years</option>{options.years.map(year=><option key={year}>{year}</option>)}</select></label>
       {scope.network && <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">City<select name="city" defaultValue={data.cityId || 'all'} className={fieldClass}><option value="all">All reporting cities</option>{options.cities.map(city=><option key={city.city_id} value={city.city_id}>{city.city_name}</option>)}</select></label>}
       {view!=='expenses' && <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Collection channel<select name="channel" defaultValue={data.channel} className={fieldClass}><option value="all">Public & Branch</option><option value="public">Public</option><option value="branch">Branch</option></select></label>}
-      <button className="h-10 rounded-lg bg-[#276431] px-4 text-sm font-semibold text-white">Apply filters</button>
       <p className="ml-auto text-xs leading-5 text-[#657568]">{data.source ? `Source workbook · Imported ${data.source.importedAt.slice(0,10)}` : 'No import has been recorded'}</p>
-    </form>
+    </AutoFilterForm>
     <details className="mb-5 rounded-xl border border-[#dce8dc] bg-[#f5faf2] px-4 py-3 text-xs leading-6 text-[#536455]"><summary className="cursor-pointer font-semibold">Source notes{data.totals.missingAmounts+data.totals.missingExpenses>0?` · ${data.totals.missingAmounts+data.totals.missingExpenses} unreported amounts`:''}</summary><div>
       Amounts are in PKR. Blank cells and dashes remain unreported, and are excluded from amount totals.
       Box counts and public staff are monthly snapshots. Expense data covers the public operation only.
@@ -64,19 +67,25 @@ export default async function MonthlyReportPage({searchParams,view='overview'}: 
         {label:'Latest reported public staff',value:data.latestStaffMonth ? data.totals.staff:'—',note:`${data.latestStaffMonth || 'No snapshot'} · ${data.totals.staffCities} cities`,icon:'users',tone:'green'},
         {label:'Cities in collection reports',value:data.totals.cities,note:'Selected reporting period',icon:'location',tone:'purple'},
         {label:'Unreported box counts',value:data.totals.missingBoxes,note:'Latest selected-month snapshot',icon:'alert',tone:'orange'},
+      ]}/> : view==='analytics' ? <MetricGrid items={[
+        {label:'Reported collections',value:amountLabel(data.collections,data.totals.collection),note:'Available amounts in the selected scope',icon:'cash',tone:'green'},
+        {label:'Leading city',value:data.byCity.find(city=>city.value!==null)?.name||'Not reported',note:data.byCity[0]?.value!=null?formatPKR(data.byCity[0].value):'No reported collection amount',icon:'location',tone:'blue'},
+        {label:'Monthly average',value:data.monthly.some(month=>month.collections!==null)?formatPKR(data.totals.collection/data.monthly.filter(month=>month.collections!==null).length):'Not reported',note:'Across months with reported collections',icon:'chart',tone:'purple'},
+        {label:'Amounts reported',value:`${Math.round((data.collections.length-data.totals.missingAmounts)/data.collections.length*100)}%`,note:`${data.collections.length-data.totals.missingAmounts} of ${data.collections.length} source collection rows`,icon:'check',tone:'green'},
       ]}/> : <MetricGrid items={[
         {label:'Reported collections',value:amountLabel(data.collections,data.totals.collection),note:`${data.collections.length} monthly rows · ${data.channel==='all'?'Public & Branch':data.channel}`,icon:'cash',tone:'green'},
         {label:'Public collections',value:data.channel==='branch'?'—':amountLabel(publicRows,data.totals.public),note:data.channel==='branch'?'Public channel excluded by filter':'Available reported amounts',icon:'wallet',tone:'blue'},
         {label:'Branch collections',value:data.channel==='public'?'—':amountLabel(branchRows,data.totals.branch),note:data.channel==='public'?'Branch channel excluded by filter':'Available reported amounts',icon:'box',tone:'purple'},
         {label:'Operational cost',value:amountLabel(data.expenses,data.totals.expenses),note:'Cost of running public collection operations',icon:'chart',tone:'orange'},
       ]}/>}
-      {view!=='coverage' && <div className="mb-6 grid gap-5 xl:grid-cols-2">
-        <ChartPanel title={view==='expenses'?'Public expenses by month':'Reported collections by month'} description={period}>
-          {view==='expenses'?<BreakdownBarChart data={data.monthly.map(row=>({name:row.month,value:row.expenses}))} valueFormat="currency"/>:<CollectionTrendChart data={data.monthly} seriesLabel="Reported collections"/>}
+      {view==='analytics' && <ReportAnalytics data={data}/>}
+      {view!=='coverage' && view!=='analytics' && <div className="mb-6 grid items-start gap-5 xl:grid-cols-2">
+        <ChartPanel title={view==='expenses'?expenseTrend.title:'Reported collections by month'} description={view==='expenses'?expenseTrend.description:period}>
+          {view==='expenses'?<BreakdownBarChart data={expenseTrend.data} valueFormat="currency" height={260} periodAxis/>:<CollectionTrendChart data={data.monthly} seriesLabel="Reported collections"/>}
         </ChartPanel>
-        <ChartPanel title={view==='expenses'?'Public expenses by category':'Reported collections by city'} description="Available amounts for the selected reporting period."><BreakdownBarChart data={view==='expenses'?data.categories:data.byCity} valueFormat="currency" horizontal height={Math.max(280,Math.min(800,data.byCity.length*30))}/></ChartPanel>
+        <ChartPanel title={view==='expenses'?'Public expenses by category':'Reported collections by city'} description="Available amounts for the selected reporting period."><BreakdownBarChart data={view==='expenses'?data.categories:data.byCity} valueFormat="currency" horizontal height={view==='expenses'?Math.max(260,Math.min(480,data.categories.length*40)):Math.max(280,Math.min(800,data.byCity.length*30))}/></ChartPanel>
       </div>}
-      {(view==='overview' || view==='analytics') && <div className="mb-6 grid gap-5 xl:grid-cols-2">
+      {view==='overview' && <div className="mb-6 grid gap-5 xl:grid-cols-2">
         <ChartPanel title="Collection channels" description="Selected year and city; the channel filter applies."><BreakdownBarChart data={[{name:'Public',value:data.totals.public},{name:'Branch',value:data.totals.branch}]} valueFormat="currency" height={240}/></ChartPanel>
         <ChartPanel title="Latest monthly snapshots" description="Counts are from one reporting month and are never added across months."><dl className="grid grid-cols-2 gap-4"><div><dt className="text-sm text-[#657568]">Reported boxes · {data.latestMonth || 'No data'}</dt><dd className="mt-2 text-3xl font-bold">{data.latestMonth?data.totals.boxes.toLocaleString('en-PK'):'—'}</dd><p className="mt-2 text-xs text-[#657568]">{data.totals.snapshotCities} reporting cities · selected channel</p></div><div><dt className="text-sm text-[#657568]">Public staff · {data.latestStaffMonth || 'No data'}</dt><dd className="mt-2 text-3xl font-bold">{data.latestStaffMonth?data.totals.staff:'—'}</dd><p className="mt-2 text-xs text-[#657568]">{data.totals.staffCities} cities with staff reports</p></div></dl></ChartPanel>
       </div>}

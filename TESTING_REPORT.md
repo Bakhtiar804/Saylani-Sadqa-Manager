@@ -127,6 +127,70 @@ The default flow fixtures now include the live-style role keys and test canonica
 compatibility as well. `FLOW_ROLE_KEYS=canonical` retains an explicit canonical
 fixture mode.
 
+## Dashboard filter consistency
+
+Dashboard filter behavior is unified through `AutoFilterForm`: report year/city/
+channel filters, rankings and rider month filters update on selection using
+Next client-side navigation, without Apply buttons or native document submits.
+The transition shows a loading status, preserves scroll, and restores selected
+values from server props on Back/Forward navigation. Invalid/incomplete month
+values are not submitted. Table and tree filters retain their existing immediate
+client-side behavior. Account creation and other write forms retain explicit
+submission.
+
+`npm run test:filters` covers combined query values, prevented native submission,
+no direct document navigation, restored state, month validation and hydration.
+The ranking regression, TypeScript, ESLint and production build passed. Browser
+checks on the real read-only Super Admin preview verified automatic Costs city/
+year changes, retained city selection, monthly/yearly chart updates, loading
+states and Back restoration, with no console warnings/errors. No live writes
+were performed.
+
+## Cost chart periods
+
+The expense period axis retains every tick (`interval=0`) with compact month
+names and unchanged full source names for tooltips. Very narrow screens can
+scroll the chart instead of dropping month labels. The expense-category chart
+height follows category count rather than city count, and chart cards align at
+the top so a tall neighbour does not stretch an empty card. `test:chart-labels`
+checks retained ticks, month/year formatting, minimum width and source labels.
+
+Costs chart tooltips retain full month names for a selected year. Selecting all
+available years groups expense amounts by year and displays only year labels.
+Chart titles and period captions follow the selected grouping. The chart uses
+the same scoped database amounts and preserves unreported values and true zeroes.
+`npm run test:expenses` verifies labels, chronological grouping, unchanged totals,
+and null/zero/empty states. TypeScript and ESLint checks passed for the change.
+
+## Analytics visual breakdowns
+
+Analytics now has currency donut charts for collection channels, city contribution
+(top five plus Other cities), and public operating expense categories, plus a
+Public/Branch monthly comparison. All receive the existing scoped
+`getMonthlyReports` result; no demo values or additional unscoped query is used.
+Its summary cards show available collections, leading city, average of months
+with reported collections, and collection-row amount completeness.
+
+`scripts/verify-analytics-source.mjs` compared all 1,638 collection rows and 801
+expense rows against the original 2024–2026 workbook, including city, month,
+sheet/row, missing values and PKR amounts at cents precision. All matched.
+Top-five plus Other cities also preserved the full database collection total.
+Read-only browser QA confirmed donut amounts/percentages and city filtering:
+Faisalabad 2026 showed PKR 160,965,499 and 100% city contribution, with matching
+Public/Branch amounts and public cost categories. No live records were changed.
+
+## Renamed account table compatibility
+
+The connected database exposed accounts as `team_members` (`team_record_id`,
+`team_id`), while application queries expected `users` (`id`, `user_id`).
+Applied `database/migrate_team_members_compatibility.sql`, an invoker-security,
+automatically updatable compatibility view. All 14 account records remained
+in the existing table; passwords, roles and city assignments were unchanged.
+PostgreSQL confirmed the view is insertable and updatable. Read-only
+`scripts/verify-account-schema.mjs http://127.0.0.1:3000` verified account counts
+and authenticated Overview, Analytics and City Admin pages on the running dev
+server. All returned HTTP 200 with expected page content.
+
 ## Limits
 
 These checks cover the implemented flows and confirmed regressions, not a

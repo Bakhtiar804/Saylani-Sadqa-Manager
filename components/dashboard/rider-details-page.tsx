@@ -10,6 +10,7 @@ import RiderAssignmentForm from './rider-assignment-form';
 import RecordExplorer from './record-explorer';
 import ChartPanel from './chart-panel';
 import { BreakdownBarChart } from './charts';
+import AutoFilterForm from './auto-filter-form';
 
 export default async function RiderDetailsPage({searchParams}:{searchParams:Promise<{month?:string}>}) {
   await connection();const session=await getOperationsSession();if(!session) redirect('/sign-in');
@@ -17,7 +18,7 @@ export default async function RiderDetailsPage({searchParams}:{searchParams:Prom
   const amount=data.history.reduce((sum,row)=>sum+Number(row.amount_pkr||0),0);
   const chart=data.profiles.map(rider=>({name:String(rider.rider_name),value:data.history.filter(row=>row.rider_id===rider.rider_id).reduce((sum,row)=>sum+Number(row.amount_pkr||0),0)}));
   return <><PageHeading eyebrow="Field team" title={session.role==='rider'?'My Rider Profile':'Rider Details'} description="Contact details, assignments and monthly collection history by area and box."/>
-    <form className="mb-6 flex flex-wrap items-end gap-3"><label className="grid gap-2 text-xs font-semibold text-[#536455]">Collection month<input type="month" name="month" defaultValue={data.month} className="rounded-xl border border-[#dce8dc] bg-white px-4 py-3 text-sm"/></label><button className="rounded-xl bg-[#276431] px-5 py-3 text-sm font-semibold text-white">View month</button><span className="pb-3 text-xs text-[#718073]">Defaults to the previous calendar month</span></form>
+    <AutoFilterForm path={session.role==='rider'?'/dashboard/rider/profile':session.role==='admin'?'/dashboard/admin/riders':session.role==='city_manager'?'/dashboard/manager/riders':'/dashboard/riders'} stateKey={data.month} className="mb-6 flex flex-wrap items-end gap-3"><label className="grid gap-2 text-xs font-semibold text-[#536455]">Collection month<input type="month" name="month" required min="2000-01" max="2099-12" defaultValue={data.month} className="rounded-xl border border-[#dce8dc] bg-white px-4 py-3 text-sm"/></label><span className="pb-3 text-xs text-[#718073]">Defaults to the previous calendar month</span></AutoFilterForm>
     {canOperate(session.role) && <RiderAssignmentForm riders={data.profiles} boxes={data.boxes}/>}
     <MetricGrid items={[
       {label:'Riders',value:data.profiles.length,note:'Within your access scope',icon:'bike',tone:'blue'},

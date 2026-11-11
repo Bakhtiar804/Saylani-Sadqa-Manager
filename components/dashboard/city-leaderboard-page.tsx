@@ -23,7 +23,7 @@ export default async function CityLeaderboardPage({searchParams}:{searchParams:P
  return <><PageHeading eyebrow={districtView?cityName:'Collection performance'} title={districtView?'District Leaderboard':'City Leaderboard'} description={districtView?'District collections · Individual operational records':'City collections · Monthly source reports'}/>
  <RankingFilters path={`${base}/leaderboard`} cityId={cityId||'all'} cities={scope.network?cities:undefined} year={data.year} years={options.years}/>
  <VictoryBar leaders={entries} href={`${base}/collections?year=${data.year}`}/>
- <RankingBoard entries={entries} label={districtView?`${cityName} · District champions`:'City collection champions'}/>
+ <RankingBoard startAfterPodium={!districtView} entries={entries} label={districtView?`${cityName} · District champions`:'City collection champions'}/>
  {districts&&<p className="mt-4 rounded-xl border border-[#e0e9db] bg-white p-4 text-xs text-[#718073]">{districts.unassignedBoxes>0?`${districts.unassignedBoxes} boxes have no district assigned. `:''}District totals use individual box collections. Monthly city totals are not divided between districts. {!entries.length&&'Assign districts in box inventory to start these rankings.'}</p>}
  </>;
 }

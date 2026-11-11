@@ -53,6 +53,19 @@ database tables.
 
 ## Apply scripts
 
+### Existing database using `team_members`
+
+If the account table has been renamed from `users` to `team_members`, with
+`id` renamed to `team_record_id` and `user_id` to `team_id`, apply
+`migrate_team_members_compatibility.sql`. It adds an automatically updatable
+`users` view over the existing account records, using invoker permissions.
+It does not copy accounts, reset passwords, change roles, or seed demo data.
+It leaves an existing `users` table/view unchanged. Do not rerun the fresh-table
+schema/seed workflow to repair this naming mismatch.
+
+Verify against a running local server with
+`node scripts/verify-account-schema.mjs http://127.0.0.1:3000`.
+
 Run these files in order against a development database:
 
 1. `schema.sql`

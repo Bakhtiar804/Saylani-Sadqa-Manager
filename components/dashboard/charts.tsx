@@ -3,6 +3,8 @@
 import {
   Area,
   AreaChart,
+  Line,
+  LineChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -37,12 +39,13 @@ type BreakdownBarChartProps = ChartProps & {
   valueKey?: string;
   valueFormat?: "number" | "currency";
   horizontal?: boolean;
+  periodAxis?: boolean;
 };
 
-export function BreakdownBarChart({ data, valueKey = "value", valueFormat = "number", height = 300, horizontal = false }: BreakdownBarChartProps) {
+export function BreakdownBarChart({ data, valueKey = "value", valueFormat = "number", height = 300, horizontal = false, periodAxis = false }: BreakdownBarChartProps) {
   const formatted = (value: unknown) => valueFormat === "currency" ? pkr(value) : Math.round(Number(value) || 0).toLocaleString("en-PK");
   if (horizontal) return <div style={{ height }} className="w-full min-w-0"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} layout="vertical" margin={{ top: 4, right: 18, left: 12, bottom: 0 }}><CartesianGrid stroke="#e9efe7" strokeDasharray="4 5" horizontal={false}/><XAxis type="number" tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} tick={{ fill: "#718073", fontSize: 12 }} tickLine={false} axisLine={false}/><YAxis type="category" dataKey="name" width={100} tick={{ fill: "#536455", fontSize: 12 }} tickLine={false} axisLine={false}/><Tooltip formatter={(value) => [formatted(value), ""]} contentStyle={{ border: "1px solid #dce8dc", borderRadius: 12, fontSize: 13 }}/><Bar dataKey={valueKey} fill="#276431" radius={[0, 7, 7, 0]} maxBarSize={28}>{data.map((entry, index) => <Cell key={`${entry.name}-${index}`} fill={entry.color || palette[index % palette.length]}/>)}</Bar></BarChart></ResponsiveContainer></div>;
-  return <div style={{ height }} className="w-full min-w-0"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} margin={{ top: 4, right: 12, left: 4, bottom: 0 }}><CartesianGrid stroke="#e9efe7" strokeDasharray="4 5" vertical={false}/><XAxis dataKey="name" tick={{ fill: "#536455", fontSize: 12 }} tickLine={false} axisLine={false}/><YAxis tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} tick={{ fill: "#718073", fontSize: 12 }} tickLine={false} axisLine={false} width={48}/><Tooltip formatter={(value) => [formatted(value), ""]} contentStyle={{ border: "1px solid #dce8dc", borderRadius: 12, fontSize: 13 }}/><Bar dataKey={valueKey} fill="#276431" radius={[7, 7, 0, 0]} maxBarSize={54}>{data.map((entry, index) => <Cell key={`${entry.name}-${index}`} fill={entry.color || palette[index % palette.length]}/>)}</Bar></BarChart></ResponsiveContainer></div>;
+  return <div className="w-full min-w-0 overflow-x-auto"><div style={{ height, minWidth: periodAxis ? data.length*36+64 : undefined }} className="w-full"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} margin={{ top: 4, right: 12, left: 4, bottom: 0 }}><CartesianGrid stroke="#e9efe7" strokeDasharray="4 5" vertical={false}/><XAxis dataKey="name" interval={periodAxis ? 0 : undefined} tickFormatter={periodAxis ? (value) => String(value).length>4 ? String(value).slice(0,3) : String(value) : undefined} height={28} tickMargin={8} tick={{ fill: "#536455", fontSize: periodAxis ? 11 : 12 }} tickLine={false} axisLine={false}/><YAxis tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} tick={{ fill: "#718073", fontSize: 12 }} tickLine={false} axisLine={false} width={48}/><Tooltip formatter={(value) => [formatted(value), ""]} contentStyle={{ border: "1px solid #dce8dc", borderRadius: 12, fontSize: 13 }}/><Bar dataKey={valueKey} fill="#276431" radius={[7, 7, 0, 0]} maxBarSize={54}>{data.map((entry, index) => <Cell key={`${entry.name}-${index}`} fill={entry.color || palette[index % palette.length]}/>)}</Bar></BarChart></ResponsiveContainer></div></div>;
 }
 
 export function StatusDonutChart({ data, height = 260 }: ChartProps) {
@@ -51,4 +54,22 @@ export function StatusDonutChart({ data, height = 260 }: ChartProps) {
 
 export function ChartLegend({ data }: { data: ChartDatum[] }) {
   return <ul className="mt-3 grid gap-2 sm:grid-cols-2">{data.map((item, index) => <li key={item.name} className="flex items-center gap-2 text-sm text-[#536455]"><i className="size-2.5 rounded-full" style={{ backgroundColor: item.color || palette[index % palette.length] }}/><span className="flex-1">{item.name}</span><b>{Number(item.value || 0).toLocaleString("en-PK")}</b></li>)}</ul>;
+}
+
+export function MoneyDonutChart({data,centerLabel}:{data:ChartDatum[];centerLabel:string}) {
+ const slices=data.filter(item=>Number(item.value)>0);
+ const total=slices.reduce((sum,item)=>sum+Number(item.value),0);
+ if(!total) return <div className="grid min-h-80 place-items-center rounded-2xl bg-[#f7faf5] p-6 text-center text-sm text-[#718073]">No positive reported amounts for this selection.</div>;
+ const compact=new Intl.NumberFormat('en-PK',{notation:'compact',maximumFractionDigits:1}).format(total);
+ return <div>
+  <div className="relative h-64 min-w-0" role="img" aria-label={`${centerLabel}: ${pkr(total)}`}>
+   <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={slices} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="88%" paddingAngle={slices.length>1?2:0} stroke="#fff" strokeWidth={3}>{slices.map((item,index)=><Cell key={item.name} fill={item.color||palette[index%palette.length]}/>)}</Pie><Tooltip formatter={(value,name)=>[`${pkr(value)} · ${(Number(value)/total*100).toFixed(1)}%`,name]} contentStyle={{border:'1px solid #dce8dc',borderRadius:12,fontSize:13}}/></PieChart></ResponsiveContainer>
+   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="text-xs font-semibold text-[#718073]">PKR</span><b className="text-3xl tracking-tight text-[#203526]">{compact}</b><span className="text-xs text-[#718073]">{centerLabel}</span></div>
+  </div>
+  <ul className="mt-3 space-y-3">{slices.map((item,index)=><li key={item.name} className="flex items-center gap-2 text-xs text-[#536455]"><i className="size-2.5 shrink-0 rounded-full" style={{backgroundColor:item.color||palette[index%palette.length]}}/><span className="min-w-0 flex-1">{item.name}</span><b className="tabular-nums text-[#203526]">{pkr(item.value)}</b><span className="w-12 text-right tabular-nums">{(Number(item.value)/total*100).toFixed(1)}%</span></li>)}</ul>
+ </div>;
+}
+
+export function ChannelComparisonChart({data}:{data:{month:string;public:number|null;branch:number|null}[]}) {
+ return <div><div className="h-80 w-full min-w-0"><ResponsiveContainer width="100%" height="100%"><LineChart data={data} margin={{top:16,right:12,left:4,bottom:10}}><CartesianGrid stroke="#e9efe7" strokeDasharray="4 5" vertical={false}/><XAxis dataKey="month" tickFormatter={month=>new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-US',{month:'short',year:'2-digit',timeZone:'UTC'})} tick={{fontSize:11,fill:'#718073'}} tickLine={false} axisLine={false} minTickGap={20}/><YAxis width={58} tickFormatter={value=>new Intl.NumberFormat('en-PK',{notation:'compact'}).format(value)} tick={{fontSize:11,fill:'#718073'}} tickLine={false} axisLine={false}/><Tooltip formatter={(value,name)=>[pkr(value),name]} contentStyle={{border:'1px solid #dce8dc',borderRadius:12,fontSize:13}}/><Line name="Public" dataKey="public" type="linear" stroke={palette[0]} strokeWidth={3} dot={false}/><Line name="Branch" dataKey="branch" type="linear" stroke={palette[1]} strokeWidth={3} dot={false}/></LineChart></ResponsiveContainer></div><div className="mt-3 flex justify-center gap-6 text-xs text-[#536455]"><span>● Public</span><span className="text-[#61bb46]">● Branch</span></div></div>;
 }
