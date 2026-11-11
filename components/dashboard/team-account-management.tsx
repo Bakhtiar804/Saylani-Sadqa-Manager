@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import type { CityOption } from "@/lib/dashboard-types";
 import type { TeamAccount, TeamRole } from "@/lib/admin-accounts";
 
-const roleTitles: Record<TeamRole, string> = { admin: "Admin", city_manager: "City Manager", rider: "Rider" };
+const roleTitles: Record<TeamRole, string> = { admin: "City Admin", city_manager: "Branch Admin", rider: "Rider" };
 const allowedRoles: Record<string, TeamRole[]> = {
   super_admin: ["admin", "city_manager", "rider"],
   admin: ["city_manager", "rider"],
@@ -15,7 +15,7 @@ const deletableRoles: Record<string, TeamRole[]> = {
   admin: ["city_manager", "rider"],
   city_manager: ["rider"],
 };
-const roleKeyByTitle: Record<TeamAccount["role"], TeamRole> = { Admin: "admin", "City Manager": "city_manager", Rider: "rider" };
+const roleKeyByTitle: Record<TeamAccount["role"], TeamRole> = { "City Admin": "admin", "Branch Admin": "city_manager", Rider: "rider" };
 
 export default function TeamAccountManagement({ actorRole, initialAccounts, cities, assignedCity }: {
   actorRole: "super_admin" | "admin" | "city_manager";

@@ -13,5 +13,5 @@ export default async function AdminTeamPage() {
     listTeamAccounts(session), getCityOptions(),
   ]);
   const cityName = cities.find((city) => city.city_id === session.cityId)?.city_name ?? "City assignment required";
-  return <><PageHeading eyebrow="Team management" title="Team Accounts" description={`Create City Manager and Rider logins for Pakistan's major cities.`}/><div className="mb-6 rounded-xl border border-[#dce8dc] bg-[#f5faf2] px-4 py-3 text-sm leading-6 text-[#536455]">Choose the city for each account. Admin accounts can be created only by a Super Admin.</div><TeamAccountManagement actorRole="admin" initialAccounts={accounts} cities={cities} assignedCity={session.cityId ? { cityId: session.cityId, cityName } : null}/></>;
+  return <><PageHeading eyebrow="Team management" title="Team Accounts" description={`Create Branch Admin and Rider logins for Pakistan's major cities.`}/><div className="mb-6 rounded-xl border border-[#dce8dc] bg-[#f5faf2] px-4 py-3 text-sm leading-6 text-[#536455]">Choose the city for each account. City Admin accounts can be created only by a Super Admin.</div><TeamAccountManagement actorRole="admin" initialAccounts={accounts} cities={cities} assignedCity={session.cityId ? { cityId: session.cityId, cityName } : null}/></>;
 }

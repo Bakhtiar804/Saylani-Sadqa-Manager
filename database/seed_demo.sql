@@ -5,8 +5,8 @@ BEGIN;
 INSERT INTO roles (role_id, role_key, display_name)
 VALUES
   (1, 'super_admin', 'Super Admin'),
-  (2, 'admin', 'Admin'),
-  (3, 'city_manager', 'City Manager'),
+  (2, 'admin', 'City Admin'),
+  (3, 'city_manager', 'Branch Admin'),
   (4, 'rider', 'Rider')
 ON CONFLICT DO NOTHING;
 

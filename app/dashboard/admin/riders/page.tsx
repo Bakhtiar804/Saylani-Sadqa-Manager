@@ -9,7 +9,7 @@ import { getAdminRecords } from "../admin-data";
 export default async function AdminRidersPage() {
   await connection();
   const { cityId, records } = await getAdminRecords(["cities", "donationBoxes", "riderTasks", "riders"] as const);
-  if (!cityId || !records) return <PageHeading eyebrow="Admin workspace" title="Riders & Tasks" description="A Super Admin must assign a city to your account before city records are available."/>;
+  if (!cityId || !records) return <PageHeading eyebrow="City Admin workspace" title="Riders & Tasks" description="A Super Admin must assign a city to your account before city records are available."/>;
   const riderById = new Map(records.riders.map((rider) => [rider.rider_id, rider]));
   const tasks = records.riderTasks.map((task) => ({ ...task, rider_name: riderById.get(task.rider_id)?.rider_name || task.rider_name || "Unassigned" }));
   const completed = tasks.filter((task) => task.task_status === "Completed").length;

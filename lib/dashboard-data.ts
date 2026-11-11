@@ -70,9 +70,13 @@ const dashboardQueries = {
   partners: `SELECT p.*, c.city_name FROM partners p JOIN cities c USING (city_id) ORDER BY p.partner_name`,
   users: `
       SELECT u.user_id, u.full_name, u.email, u.phone, u.city_id, c.city_name,
-        COALESCE(r.display_name,
-          CASE u.identity_type WHEN 'field_staff' THEN 'Field Staff' WHEN 'partner_identity' THEN 'Partner' END
-        ) AS role,
+        CASE r.role_key
+          WHEN 'admin' THEN 'City Admin'
+          WHEN 'city_manager' THEN 'Branch Admin'
+          ELSE COALESCE(r.display_name,
+            CASE u.identity_type WHEN 'field_staff' THEN 'Field Staff' WHEN 'partner_identity' THEN 'Partner' END
+          )
+        END AS role,
         u.identity_type,
         CASE WHEN u.deleted_at IS NOT NULL THEN 'Deleted' ELSE INITCAP(u.account_status) END AS account_status,
         u.created_at
@@ -217,6 +221,187 @@ export async function getCityOptions(): Promise<CityOption[]> {
 
 export async function getAllRecords(): Promise<DashboardData> {
   return getDashboardRecords(allDatasetKeys) as Promise<DashboardData>;
+}
+
+type ReportBreakdown = { name: string; value: number; records: number };
+type ReportMonth = { month: string; label: string; value: number };
+
+export type ImportedCityReportSummary = {
+  collections: { records: number; amount: number; firstMonth: string | null; latestMonth: string | null; monthly: ReportMonth[] };
+  expenses: { records: number; amount: number };
+  staff: { latestMonth: string | null; latestTotal: number };
+};
+
+export async function getImportedCityReportSummary(cityName: string): Promise<ImportedCityReportSummary> {
+  "use cache";
+  cacheLife({ stale: 5, revalidate: 10, expire: 60 });
+  cacheTag(DASHBOARD_DATA_CACHE_TAG);
+
+  const pool = getDatabasePool();
+  const tables = await pool.query<{ table_name: string }>(`SELECT table_name FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = ANY($1::text[])`, [[
+    "monthly_collection_reports", "monthly_expense_reports", "monthly_staff_counts", "reporting_cities",
+  ]]);
+  const available = new Set(tables.rows.map((row) => row.table_name));
+  const join = available.has("reporting_cities")
+    ? "LEFT JOIN reporting_cities city ON city.city_id = report.city_id"
+    : "";
+  const normalizedCity = (expression: string) => `LOWER(regexp_replace(COALESCE(${expression}, ''), '[^a-z0-9]', '', 'g'))`;
+  const cityFilterFor = (reportAlias: string, cityAlias: string) => available.has("reporting_cities")
+    ? `(${normalizedCity(`${cityAlias}.city_name`)} = ${normalizedCity("$1")} OR ${normalizedCity(`${cityAlias}.normalized_city_name`)} = ${normalizedCity("$1")} OR ${normalizedCity(`${reportAlias}.source_city_name`)} = ${normalizedCity("$1")})`
+    : `${normalizedCity(`${reportAlias}.source_city_name`)} = ${normalizedCity("$1")}`;
+  const cityNameExpression = available.has("reporting_cities")
+    ? "COALESCE(city.city_name, report.source_city_name, 'Unassigned')"
+    : "COALESCE(report.source_city_name, 'Unassigned')";
+  const cityWhere = cityFilterFor("report", "city");
+  const latestCityWhere = cityFilterFor("latest", "latest_city");
+  const query = <T extends Record<string, unknown>>(table: string, sql: string): Promise<{ rows: T[] }> => available.has(table)
+    ? pool.query<T>(sql, [cityName])
+    : Promise.resolve({ rows: [] as T[] });
+
+  const [collectionSummary, collectionMonths, expenseSummary, staffSummary] = await Promise.all([
+    query<{ records: number; amount_pkr: string | number; first_month: string | null; latest_month: string | null }>("monthly_collection_reports", `SELECT COUNT(*)::int AS records,
+      COALESCE(SUM(report.amount_pkr), 0) AS amount_pkr,
+      MIN(report.report_month)::text AS first_month, MAX(report.report_month)::text AS latest_month
+      FROM monthly_collection_reports report ${join} WHERE ${cityWhere}`),
+    query<{ month: string; amount_pkr: string | number }>("monthly_collection_reports", `SELECT TO_CHAR(report.report_month, 'YYYY-MM') AS month,
+      SUM(report.amount_pkr) AS amount_pkr
+      FROM monthly_collection_reports report ${join} WHERE ${cityWhere}
+      GROUP BY 1 ORDER BY 1`),
+    query<{ records: number; amount_pkr: string | number }>("monthly_expense_reports", `SELECT COUNT(*)::int AS records,
+      COALESCE(SUM(report.amount_pkr), 0) AS amount_pkr
+      FROM monthly_expense_reports report ${join} WHERE ${cityWhere}`),
+    query<{ latest_month: string; latest_total: number }>("monthly_staff_counts", `SELECT report.report_month::text AS latest_month,
+      COALESCE(SUM(report.staff_count), 0)::int AS latest_total
+      FROM monthly_staff_counts report ${join}
+      WHERE ${cityWhere} AND report.report_month = (
+        SELECT MAX(latest.report_month) FROM monthly_staff_counts latest
+        ${available.has("reporting_cities") ? "LEFT JOIN reporting_cities latest_city ON latest_city.city_id = latest.city_id" : ""}
+        WHERE ${latestCityWhere}
+      ) GROUP BY report.report_month ORDER BY report.report_month DESC LIMIT 1`),
+  ]);
+
+  const collection = collectionSummary.rows[0] ?? {};
+  const expenses = expenseSummary.rows[0] ?? {};
+  const staff = staffSummary.rows[0] ?? {};
+  return {
+    collections: {
+      records: Number(collection.records) || 0,
+      amount: Number(collection.amount_pkr) || 0,
+      firstMonth: (collection.first_month as string | null) ?? null,
+      latestMonth: (collection.latest_month as string | null) ?? null,
+      monthly: collectionMonths.rows.map((row: { month: string; amount_pkr: string | number }) => ({
+        month: row.month,
+        label: new Date(`${row.month}-01T00:00:00Z`).toLocaleDateString("en-PK", { month: "short", year: "2-digit", timeZone: "UTC" }),
+        value: Number(row.amount_pkr) || 0,
+      })),
+    },
+    expenses: { records: Number(expenses.records) || 0, amount: Number(expenses.amount_pkr) || 0 },
+    staff: { latestMonth: (staff.latest_month as string | null) ?? null, latestTotal: Number(staff.latest_total) || 0 },
+  };
+}
+
+export async function getImportedReportSummary() {
+  "use cache";
+  cacheLife({ stale: 5, revalidate: 10, expire: 60 });
+  cacheTag(DASHBOARD_DATA_CACHE_TAG);
+
+  const pool = getDatabasePool();
+  const tableCheck = await pool.query<{ table_name: string }>(`SELECT table_name FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = ANY($1::text[])`, [[
+    "monthly_collection_reports", "monthly_expense_reports", "monthly_staff_counts", "reporting_cities",
+  ]]);
+  const availableTables = new Set(tableCheck.rows.map((row) => row.table_name));
+  const queryIfAvailable = <T extends Record<string, unknown>>(table: string, sql: string): Promise<{ rows: T[] }> => availableTables.has(table)
+    ? pool.query<T>(sql)
+    : Promise.resolve({ rows: [] as T[] });
+  const cityJoin = availableTables.has("reporting_cities")
+    ? "LEFT JOIN reporting_cities city ON city.city_id = report.city_id"
+    : "";
+  const reportCityName = availableTables.has("reporting_cities")
+    ? "COALESCE(city.city_name, report.source_city_name, 'Unassigned')"
+    : "COALESCE(report.source_city_name, 'Unassigned')";
+  const [collectionSummary, collectionMonths, collectionChannels, collectionCities,
+    expenseSummary, expenseMonths, expenseCategories, staffSummary, staffCities,
+    reportingCities] = await Promise.all([
+    queryIfAvailable<{ records: number; amount_pkr: string | number; box_count: number; first_month: string | null; latest_month: string | null }>("monthly_collection_reports", `SELECT COUNT(*)::int AS records,
+      COALESCE(SUM(amount_pkr), 0) AS amount_pkr,
+      COALESCE(SUM(box_count), 0)::int AS box_count,
+      MIN(report_month)::text AS first_month, MAX(report_month)::text AS latest_month
+      FROM monthly_collection_reports`),
+    queryIfAvailable<{ month: string; amount_pkr: string | number; records: number }>("monthly_collection_reports", `SELECT TO_CHAR(report_month, 'YYYY-MM') AS month,
+      SUM(amount_pkr) AS amount_pkr, COUNT(*)::int AS records
+      FROM monthly_collection_reports GROUP BY 1 ORDER BY 1`),
+    queryIfAvailable<{ name: string; value: string | number; records: number }>("monthly_collection_reports", `SELECT COALESCE(NULLIF(TRIM(collection_channel), ''), 'Unspecified') AS name,
+      SUM(amount_pkr) AS value, COUNT(*)::int AS records
+      FROM monthly_collection_reports GROUP BY 1 ORDER BY value DESC`),
+    queryIfAvailable<{ name: string; value: string | number; records: number }>("monthly_collection_reports", `SELECT ${reportCityName} AS name,
+      SUM(report.amount_pkr) AS value, COUNT(*)::int AS records
+      FROM monthly_collection_reports report
+      ${cityJoin}
+      GROUP BY 1 ORDER BY value DESC LIMIT 10`),
+    queryIfAvailable<{ records: number; amount_pkr: string | number; first_month: string | null; latest_month: string | null }>("monthly_expense_reports", `SELECT COUNT(*)::int AS records,
+      COALESCE(SUM(amount_pkr), 0) AS amount_pkr,
+      MIN(report_month)::text AS first_month, MAX(report_month)::text AS latest_month
+      FROM monthly_expense_reports`),
+    queryIfAvailable<{ month: string; amount_pkr: string | number; records: number }>("monthly_expense_reports", `SELECT TO_CHAR(report_month, 'YYYY-MM') AS month,
+      SUM(amount_pkr) AS amount_pkr, COUNT(*)::int AS records
+      FROM monthly_expense_reports GROUP BY 1 ORDER BY 1`),
+    queryIfAvailable<{ name: string; value: string | number; records: number }>("monthly_expense_reports", `SELECT COALESCE(NULLIF(TRIM(expense_category), ''), 'Unspecified') AS name,
+      SUM(amount_pkr) AS value, COUNT(*)::int AS records
+      FROM monthly_expense_reports GROUP BY 1 ORDER BY value DESC`),
+    queryIfAvailable<{ records: number; latest_month: string | null; latest_total: number; latest_cities: number }>("monthly_staff_counts", `SELECT COUNT(*)::int AS records, MAX(report_month)::text AS latest_month,
+      COALESCE(SUM(staff_count) FILTER (WHERE report_month = (SELECT MAX(report_month) FROM monthly_staff_counts)), 0)::int AS latest_total,
+      COUNT(DISTINCT city_id) FILTER (WHERE report_month = (SELECT MAX(report_month) FROM monthly_staff_counts))::int AS latest_cities
+      FROM monthly_staff_counts`),
+    queryIfAvailable<{ name: string; value: string | number }>("monthly_staff_counts", `SELECT ${reportCityName} AS name,
+      SUM(report.staff_count)::int AS value
+      FROM monthly_staff_counts report
+      ${cityJoin}
+      WHERE report.report_month = (SELECT MAX(report_month) FROM monthly_staff_counts)
+      GROUP BY 1 ORDER BY value DESC LIMIT 10`),
+    queryIfAvailable<{ count: number }>("reporting_cities", `SELECT COUNT(*)::int AS count FROM reporting_cities`),
+  ]);
+
+  const mapBreakdown = (rows: Array<{ name: string; value: string | number; records?: number }>): ReportBreakdown[] =>
+    rows.map((row) => ({ name: row.name, value: Number(row.value) || 0, records: Number(row.records) || 0 }));
+  const mapMonths = (rows: Array<{ month: string; amount_pkr: string | number }>): ReportMonth[] =>
+    rows.map((row) => ({
+      month: row.month,
+      label: new Date(`${row.month}-01T00:00:00Z`).toLocaleDateString("en-PK", { month: "short", year: "2-digit", timeZone: "UTC" }),
+      value: Number(row.amount_pkr) || 0,
+    }));
+  const collection = collectionSummary.rows[0];
+  const expense = expenseSummary.rows[0];
+  const staff = staffSummary.rows[0];
+  return {
+    collections: {
+      records: Number(collection.records) || 0,
+      amount: Number(collection.amount_pkr) || 0,
+      boxes: Number(collection.box_count) || 0,
+      firstMonth: collection.first_month as string | null,
+      latestMonth: collection.latest_month as string | null,
+      monthly: mapMonths(collectionMonths.rows),
+      channels: mapBreakdown(collectionChannels.rows),
+      cities: mapBreakdown(collectionCities.rows),
+    },
+    expenses: {
+      records: Number(expense.records) || 0,
+      amount: Number(expense.amount_pkr) || 0,
+      firstMonth: expense.first_month as string | null,
+      latestMonth: expense.latest_month as string | null,
+      monthly: mapMonths(expenseMonths.rows),
+      categories: mapBreakdown(expenseCategories.rows),
+    },
+    staff: {
+      records: Number(staff.records) || 0,
+      latestMonth: staff.latest_month as string | null,
+      latestTotal: Number(staff.latest_total) || 0,
+      latestCities: Number(staff.latest_cities) || 0,
+      cities: staffCities.rows.map((row: { name: string; value: string | number }) => ({ name: row.name, value: Number(row.value) || 0 })),
+    },
+    reportingCityCount: Number(reportingCities.rows[0]?.count) || 0,
+  };
 }
 
 export type CollectionExplorerOptions = {

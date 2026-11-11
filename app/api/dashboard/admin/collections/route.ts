@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     });
     return Response.json(data, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
-    console.error("Could not load the requested Admin collection page.", error);
+    console.error("Could not load the requested City Admin collection page.", error);
     return Response.json({ error: "Collections are temporarily unavailable." }, { status: 503 });
   }
 }

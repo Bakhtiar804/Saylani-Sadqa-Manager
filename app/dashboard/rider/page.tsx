@@ -16,7 +16,7 @@ export default async function RiderDashboardPage() {
   await connection();
   const session = await getRiderSession();
   const data = await getRiderDashboard(session.userId);
-  if (!data) return <><PageHeading eyebrow="Rider workspace" title={`Welcome, ${session.name}`} description="Your login is not linked to a rider profile yet."/><section className="rounded-2xl border border-[#e3ebe0] bg-white p-6"><h2 className="text-lg font-bold text-[#203526]">Rider profile required</h2><p className="mt-2 text-sm leading-6 text-[#657568]">Ask your City Manager to link this login to a rider profile before you can see assigned work.</p></section></>;
+  if (!data) return <><PageHeading eyebrow="Rider workspace" title={`Welcome, ${session.name}`} description="Your login is not linked to a rider profile yet."/><section className="rounded-2xl border border-[#e3ebe0] bg-white p-6"><h2 className="text-lg font-bold text-[#203526]">Rider profile required</h2><p className="mt-2 text-sm leading-6 text-[#657568]">Ask your Branch Admin to link this login to a rider profile before you can see assigned work.</p></section></>;
   const taskStatuses = countBy(data.tasks, "task_status", ["Assigned", "In Progress", "Completed", "Cancelled"]);
   const completion = percent(data.summary.completedTasks, data.summary.taskCount);
   const city = data.profile.city_name || "City not assigned";

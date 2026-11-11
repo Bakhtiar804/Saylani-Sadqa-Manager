@@ -4,8 +4,8 @@ import Icon from "./icons";
 
 const roleLabels: Record<string, string> = {
   super_admin: "Super Admin",
-  admin: "Admin",
-  city_manager: "City Manager",
+  admin: "City Admin",
+  city_manager: "Branch Admin",
   rider: "Rider",
 };
 

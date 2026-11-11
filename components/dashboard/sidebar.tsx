@@ -13,8 +13,8 @@ import Icon from "./icons";
 
 const roleLabels: Record<string, string> = {
   super_admin: "Super Admin",
-  admin: "Admin",
-  city_manager: "City Manager",
+  admin: "City Admin",
+  city_manager: "Branch Admin",
   rider: "Rider",
 };
 
@@ -92,16 +92,16 @@ export default function Sidebar({
         {canManageAdmins && (
           <Link
             href="/dashboard/admins"
-            aria-label="Admin Management"
+            aria-label="City Admin Management"
             aria-current={
               pathname.startsWith("/dashboard/admins") ? "page" : undefined
             }
-            title="Admin Management"
+            title="City Admin Management"
             className={`group relative flex min-h-[46px] items-center gap-3 rounded-[10px] px-3 text-[14px] font-semibold transition duration-200 hover:bg-[#f4f8f2] hover:text-[#276431] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#61bb46] max-[900px]:justify-center max-[900px]:px-0 max-[600px]:w-[70px] max-[600px]:min-w-[70px] max-[600px]:shrink-0 max-[600px]:min-h-[58px] max-[600px]:flex-col max-[600px]:gap-1 max-[600px]:px-1 max-[600px]:text-[10px] ${pathname.startsWith("/dashboard/admins") ? "bg-[#edf6e9] text-[#276431] before:absolute before:-left-4 before:h-7 before:w-[3px] before:rounded-r before:bg-[#61bb46] max-[900px]:before:-left-[9px] max-[600px]:before:-top-1 max-[600px]:before:left-1/2 max-[600px]:before:h-[3px] max-[600px]:before:w-6 max-[600px]:before:-translate-x-1/2" : "text-[#627165]"}`}
           >
             <Icon name="users" size={19} />
             <span className="max-[900px]:hidden max-[600px]:block max-[600px]:whitespace-nowrap">
-              Admins
+              City Admins
             </span>
           </Link>
         )}

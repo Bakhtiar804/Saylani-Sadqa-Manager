@@ -20,7 +20,7 @@ export default async function UsersPage() {
     <MetricGrid items={[
       { label: "User records", value: users.length.toLocaleString("en-PK"), note: "Passwords excluded from this interface", icon: "users", tone: "blue" },
       { label: "Active accounts", value: users.filter((user) => user.account_status === "Active").length.toLocaleString("en-PK"), note: "Based on source account status", icon: "check", tone: "green" },
-      { label: "Administrative roles", value: users.filter((user) => ["Super Admin", "Admin", "City Manager"].includes(String(user.role))).length.toLocaleString("en-PK"), note: "Super Admin, Admin, City Manager", icon: "shield", tone: "purple" },
+      { label: "Administrative roles", value: users.filter((user) => ["Super Admin", "City Admin", "Branch Admin"].includes(String(user.role))).length.toLocaleString("en-PK"), note: "Super Admin, City Admin, Branch Admin", icon: "shield", tone: "purple" },
       { label: "Cities represented", value: new Set(users.map((user) => user.city_id)).size.toLocaleString("en-PK"), note: "User accounts with a city assignment", icon: "location", tone: "orange" },
     ]}/>
     <div className="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-3"><ChartPanel title="Users by role" description="Account count across the assigned roles." className="xl:col-span-2"><BreakdownBarChart data={roleData} horizontal height={320}/></ChartPanel><ChartPanel title="Account status" description="Current status breakdown."><StatusDonutChart data={statusData} height={250}/><ChartLegend data={statusData}/></ChartPanel></div>

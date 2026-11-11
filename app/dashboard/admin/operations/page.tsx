@@ -9,7 +9,7 @@ import { getAdminRecords } from "../admin-data";
 export default async function AdminOperationsPage() {
   await connection();
   const { cityId, records } = await getAdminRecords(["boxInspectionLog", "cities", "securityIncidents"] as const);
-  if (!cityId || !records) return <PageHeading eyebrow="Admin workspace" title="Field Operations" description="A Super Admin must assign a city to your account before city records are available."/>;
+  if (!cityId || !records) return <PageHeading eyebrow="City Admin workspace" title="Field Operations" description="A Super Admin must assign a city to your account before city records are available."/>;
   const inspections = records.boxInspectionLog;
   const incidents = records.securityIncidents;
   const openIncidents = incidents.filter((incident) => incident.incident_status !== "Resolved").length;

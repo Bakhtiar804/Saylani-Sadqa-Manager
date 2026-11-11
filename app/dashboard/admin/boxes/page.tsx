@@ -9,7 +9,7 @@ import { getAdminRecords } from "../admin-data";
 export default async function AdminBoxesPage() {
   await connection();
   const { cityId, role, records } = await getAdminRecords(["cities", "donationBoxes", "boxStatusHistory", "partners", "users", "riders"] as const);
-  if (!cityId || !records) return <PageHeading eyebrow="Admin workspace" title="Donation Boxes" description="A Super Admin must assign a city to your account before city records are available."/>;
+  if (!cityId || !records) return <PageHeading eyebrow="City Admin workspace" title="Donation Boxes" description="A Super Admin must assign a city to your account before city records are available."/>;
 
   const boxes = records.donationBoxes;
   const active = boxes.filter((box) => box.box_status === "Active").length;

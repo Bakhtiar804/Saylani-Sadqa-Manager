@@ -13,7 +13,7 @@ export type TeamAccount = {
   name: string;
   email: string;
   phone: string;
-  role: "Admin" | "City Manager" | "Rider";
+  role: "City Admin" | "Branch Admin" | "Rider";
   cityId: string | null;
   cityName: string | null;
   zone: string | null;
@@ -21,6 +21,12 @@ export type TeamAccount = {
   employmentStatus: "Active" | "Inactive" | null;
   createdAt: string | null;
 };
+
+function getTeamRoleLabel(role: TeamRole): TeamAccount["role"] {
+  if (role === "admin") return "City Admin";
+  if (role === "city_manager") return "Branch Admin";
+  return "Rider";
+}
 
 export async function listTeamAccounts(session: UserSession): Promise<TeamAccount[]> {
   const parameters: unknown[] = [];
@@ -33,12 +39,12 @@ export async function listTeamAccounts(session: UserSession): Promise<TeamAccoun
   }
   const result = await getDatabasePool().query<QueryResultRow & {
     user_id: string; full_name: string; email: string; phone: string; role_key: TeamRole;
-    display_name: TeamAccount["role"]; city_id: string | null; city_name: string | null;
+    city_id: string | null; city_name: string | null;
     assigned_zone: string | null; account_status: TeamAccount["accountStatus"];
     employment_status: TeamAccount["employmentStatus"]; created_at: Date | null;
   }>(`
     SELECT u.user_id, u.full_name, u.email, u.phone, u.account_status,
-      r.role_key, r.display_name, u.city_id, city.city_name,
+      r.role_key, u.city_id, city.city_name,
       rider.assigned_zone, rider.employment_status, u.created_at
     FROM users u
     JOIN roles r ON r.role_id = u.role_id
@@ -49,7 +55,7 @@ export async function listTeamAccounts(session: UserSession): Promise<TeamAccoun
   `, parameters);
   return result.rows.map((row) => ({
     id: row.user_id, name: row.full_name, email: row.email, phone: row.phone,
-    role: row.display_name, cityId: row.city_id, cityName: row.city_name,
+    role: getTeamRoleLabel(row.role_key), cityId: row.city_id, cityName: row.city_name,
     zone: row.assigned_zone, accountStatus: row.account_status,
     employmentStatus: row.employment_status, createdAt: row.created_at?.toISOString() ?? null,
   }));
@@ -152,7 +158,7 @@ export async function createTeamAccount(input: {
     if (client) await client.query("BEGIN");
     const result = await (client ?? pool).query<QueryResultRow & {
       user_id: string; full_name: string; email: string; phone: string; role_key: TeamRole;
-      display_name: TeamAccount["role"]; city_id: string; city_name: string;
+      city_id: string; city_name: string;
       account_status: TeamAccount["accountStatus"]; created_at: Date;
     }>(`
       INSERT INTO users (user_id, full_name, email, phone, city_id, role_id, identity_type, account_status, password_hash)
@@ -161,7 +167,6 @@ export async function createTeamAccount(input: {
         'login_account', $7, $8)
       RETURNING user_id, full_name, email, phone, city_id, account_status, created_at,
         $6::VARCHAR AS role_key,
-        (SELECT display_name FROM roles WHERE role_key = $6) AS display_name,
         (SELECT city_name FROM cities WHERE city_id = $5) AS city_name
     `, [userId, input.name, input.email.toLowerCase(), input.phone, input.cityId, input.role, input.accountStatus, input.passwordHash]);
     const account = result.rows[0];
@@ -176,7 +181,7 @@ export async function createTeamAccount(input: {
     revalidateTag("dashboard-db-records", { expire: 0 });
     return {
       id: account.user_id, name: account.full_name, email: account.email, phone: account.phone,
-      role: account.display_name, cityId: account.city_id, cityName: account.city_name,
+      role: getTeamRoleLabel(account.role_key), cityId: account.city_id, cityName: account.city_name,
       zone: input.role === "rider" ? input.assignedZone ?? null : null,
       accountStatus: account.account_status,
       employmentStatus: input.role === "rider" ? input.employmentStatus ?? "Active" : null,
@@ -199,6 +204,22 @@ type DatabaseAdmin = QueryResultRow & {
   role_key: string;
   display_name: string;
 };
+
+function normalizeLoginRole(roleKey: string): AppRole | null {
+  switch (roleKey) {
+    case "super_admin":
+    case "admin":
+    case "city_manager":
+    case "rider":
+      return roleKey;
+    case "city_admin":
+      return "admin";
+    case "branch_admin":
+      return "city_manager";
+    default:
+      return null;
+  }
+}
 
 export async function findLoginAccountByEmail(email: string): Promise<{
   id: string;
@@ -226,16 +247,15 @@ export async function findLoginAccountByEmail(email: string): Promise<{
 
   const user = result.rows[0];
   if (!user || user.account_status !== "active" || !user.password_hash) return null;
-  if (!(["super_admin", "admin", "city_manager", "rider"] as const).includes(user.role_key as AppRole)) {
-    return null;
-  }
+  const role = normalizeLoginRole(user.role_key);
+  if (!role) return null;
 
   return {
     id: user.user_id,
     email: user.email,
     name: user.full_name,
     passwordHash: user.password_hash,
-    role: user.role_key as AppRole,
+    role,
     cityId: user.city_id,
   };
 }

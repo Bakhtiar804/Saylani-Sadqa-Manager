@@ -13,9 +13,11 @@ import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
 import DashboardSkeleton from "@/components/dashboard/dashboard-skeleton";
+import ImportedNetworkReports from "@/components/dashboard/imported-network-reports";
 import { connection } from "next/server";
 import {
   formatPKR,
+  getImportedReportSummary,
   getOverviewData,
 } from "@/lib/dashboard-data";
 import type { MetricItem } from "@/components/dashboard/metric-grid";
@@ -28,13 +30,13 @@ type DashboardPageProps = {
   }>;
 };
 
-async function DashboardContent({ searchParams }: DashboardPageProps) {
+async function DashboardContent({ searchParams, showImportedReports = false }: DashboardPageProps & { showImportedReports?: boolean }) {
   await connection();
   const params = await searchParams;
-  const data = await getOverviewData({
+  const [data, importedReports] = await Promise.all([getOverviewData({
     range: typeof params.range === "string" ? params.range : undefined,
     city: typeof params.city === "string" ? params.city : undefined,
-  });
+  }), showImportedReports ? getImportedReportSummary() : Promise.resolve(null)]);
   const taskCompletion = data.totals.tasks
     ? Math.round((data.totals.completedTasks / data.totals.tasks) * 100)
     : 0;
@@ -99,6 +101,7 @@ async function DashboardContent({ searchParams }: DashboardPageProps) {
         cities={data.cities}
       />
       <MetricGrid items={metrics} />
+      {importedReports && <ImportedNetworkReports reports={importedReports} />}
       <div className="mb-6 grid grid-cols-1 gap-5 2xl:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
         <ChartPanel
           title="Verified collection trend"
@@ -256,5 +259,5 @@ async function DashboardGate({ searchParams }: DashboardPageProps) {
   if (session?.role === "admin") redirect("/dashboard/admin");
   if (session?.role === "city_manager") redirect("/dashboard/manager");
   if (session?.role === "rider") redirect("/dashboard/rider");
-  return <Suspense fallback={<DashboardSkeleton />}><DashboardContent searchParams={searchParams} /></Suspense>;
+  return <Suspense fallback={<DashboardSkeleton />}><DashboardContent searchParams={searchParams} showImportedReports={session?.role === "super_admin"} /></Suspense>;
 }

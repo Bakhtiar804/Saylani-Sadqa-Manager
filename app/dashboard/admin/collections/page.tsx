@@ -8,7 +8,7 @@ import RecordExplorer from "@/components/dashboard/record-explorer";
 export default async function AdminCollectionsPage() {
   await connection();
   const cityId = await getAdminCity();
-  if (!cityId) return <PageHeading eyebrow="Admin workspace" title="Collections" description="A Super Admin must assign a city to your account before city records are available."/>;
+  if (!cityId) return <PageHeading eyebrow="City Admin workspace" title="Collections" description="A Super Admin must assign a city to your account before city records are available."/>;
   const [initial, fieldLogs, { records }] = await Promise.all([
     getCollectionExplorerPage({ city: cityId, page: 1 }),
     getFieldCollectionExplorerPage({ city: cityId, page: 1 }),

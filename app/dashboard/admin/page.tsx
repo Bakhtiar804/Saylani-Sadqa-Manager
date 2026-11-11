@@ -5,16 +5,17 @@ import { redirect } from "next/navigation";
 import { CollectionTrendChart, StatusDonutChart } from "@/components/dashboard/charts";
 import ChartPanel from "@/components/dashboard/chart-panel";
 import DemoNotice from "@/components/dashboard/demo-notice";
+import ImportedCityReports from "@/components/dashboard/imported-city-reports";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
-import { formatPKR, getCityName, getOverviewData } from "@/lib/dashboard-data";
+import { formatPKR, getCityName, getImportedCityReportSummary, getOverviewData } from "@/lib/dashboard-data";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 
 type AdminDashboardProps = { searchParams: Promise<{ range?: string }> };
 
 export const metadata = {
-  title: "Admin Dashboard | Saylani Sadqa Manager",
+  title: "City Admin Dashboard | Saylani Sadqa Manager",
   description: "City operations overview for Saylani Sadqa Manager.",
 };
 
@@ -35,22 +36,23 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
   const params = await searchParams;
   if (!session.cityId) {
     return <>
-      <PageHeading eyebrow="Admin workspace" title="Admin Dashboard" description="Your operational overview will appear once an operating city is assigned to your account." />
+      <PageHeading eyebrow="City Admin workspace" title="City Admin Dashboard" description="Your operational overview will appear once an operating city is assigned to your account." />
       <section className="rounded-2xl border border-[#e3ebe0] bg-white p-6 shadow-[0_3px_14px_rgba(28,52,33,.035)]">
         <h2 className="text-lg font-bold text-[#203526]">City assignment required</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#657568]">Admin dashboards are scoped to one city. Ask a Super Admin to assign a city to this account, then sign in again.</p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#657568]">City Admin dashboards are scoped to one city. Ask a Super Admin to assign a city to this account, then sign in again.</p>
       </section>
     </>;
   }
 
   const data = await getOverviewData({ range: params.range, city: session.cityId });
   const cityName = getCityName(session.cityId, data.cities);
+  const cityReports = await getImportedCityReportSummary(cityName);
   const taskCompletion = data.totals.tasks ? Math.round(data.totals.completedTasks / data.totals.tasks * 100) : 0;
   const reviewCount = data.totals.pendingCount + data.totals.flaggedCount;
   const today = new Intl.DateTimeFormat("en-PK", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Karachi" }).format(new Date());
 
   return <>
-    <PageHeading eyebrow={`${today} · ${cityName}`} title="Admin Dashboard" description={`Your ${cityName} operations at a glance. Review collections, donation boxes, and rider activity for your assigned city.`} />
+    <PageHeading eyebrow={`${today} · ${cityName}`} title="City Admin Dashboard" description={`Your ${cityName} operations at a glance. Review collections, donation boxes, and rider activity for your assigned city.`} />
     <DemoNotice />
     <form action="/dashboard/admin" className="mb-6 flex flex-wrap items-end gap-3 rounded-2xl border border-[#e3ebe0] bg-white p-4 shadow-[0_3px_14px_rgba(28,52,33,.025)]">
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Period<select name="range" defaultValue={data.range} className="h-10 min-w-36 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm text-[#203526] outline-none focus:border-[#276431] focus:ring-2 focus:ring-[#61bb46]/25"><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All available dates</option></select></label>
@@ -63,6 +65,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
       { label: "Donation boxes", value: data.totals.boxes.toLocaleString("en-PK"), note: `${data.totals.activeBoxes} active · ${data.totals.needsAttentionBoxes} need attention`, icon: "box", tone: data.totals.needsAttentionBoxes ? "red" : "blue" },
       { label: "Rider task completion", value: `${taskCompletion}%`, note: `${data.totals.completedTasks} of ${data.totals.tasks} tasks complete`, icon: "bike", tone: "purple" },
     ]} />
+    <ImportedCityReports cityName={cityName} reports={cityReports}/>
     <div className="mb-6 grid grid-cols-1 gap-5 2xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,.8fr)]">
       <ChartPanel title="Verified collection trend" description={`Daily verified collections for ${cityName} from ${data.startDate} to ${data.endDate}.`}><CollectionTrendChart data={data.chartData} height={300} /></ChartPanel>
       <div id="review-status"><ChartPanel title="Collection status" description="Records in the selected period."><div className="mx-auto max-w-[280px]"><StatusDonutChart data={data.statusCounts.map((item) => ({ ...item, color: item.name === "Verified" ? "#276431" : item.name === "Flagged" ? "#b94b42" : "#d99a38" }))} /></div><div className="mt-4 grid gap-2">{data.statusCounts.map((item) => <div key={item.name} className="flex items-center justify-between text-sm"><span className="text-[#657568]">{item.name}</span><b className="text-[#203526]">{item.value.toLocaleString("en-PK")}</b></div>)}</div></ChartPanel></div>
@@ -80,7 +83,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
         <p className="mt-5 border-t border-[#edf1eb] pt-4 text-xs text-[#718073]">Verified collections in this period: <b className="text-[#203526]">{formatPKR(data.totals.verifiedPKR)}</b></p>
       </ChartPanel></div>
     </div>
-    <RecordExplorer title="Recent collection records" description={`Latest collection records from ${cityName}. The list stays within the city assigned to your Admin account.`} records={data.recentCollections} columns={[{ key: "collection_id", label: "Collection ID" }, { key: "collection_date", label: "Date" }, { key: "collection_amount_pkr", label: "Amount" }, { key: "collection_status", label: "Status" }]} statusKey="collection_status" dateKey="collection_date" cities={data.cities} />
+    <RecordExplorer title="Recent collection records" description={`Latest collection records from ${cityName}. The list stays within the city assigned to your City Admin account.`} records={data.recentCollections} columns={[{ key: "collection_id", label: "Collection ID" }, { key: "collection_date", label: "Date" }, { key: "collection_amount_pkr", label: "Amount" }, { key: "collection_status", label: "Status" }]} statusKey="collection_status" dateKey="collection_date" cities={data.cities} />
     <section className="rounded-2xl border border-[#e3ebe0] bg-white p-5 shadow-[0_3px_14px_rgba(28,52,33,.035)] sm:p-6">
       <div id="recent-activity" className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-bold text-[#203526]">Recent activity</h2><p className="mt-1 text-sm text-[#718073]">Latest collection, incident, and inspection updates for {cityName}.</p></div><Link href="#review-status" className="text-sm font-semibold text-[#276431] hover:underline">Review collection status →</Link></div>
       <div className="divide-y divide-[#edf1eb]">{data.activity.length ? data.activity.map((item) => <article key={`${item.id}-${item.title}`} className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0"><span className={`mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl ${item.tone === "green" ? "bg-[#e9f4e4] text-[#32723a]" : item.tone === "red" ? "bg-[#fbeceb] text-[#a9483f]" : item.tone === "blue" ? "bg-[#eaf1fc] text-[#326ac1]" : "bg-[#fbf0e3] text-[#a96d20]"}`}>{item.icon === "shield" ? "◇" : item.icon === "box" ? "▣" : "₨"}</span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-[#344639]">{item.title}</p><p className="mt-1 text-[13px] text-[#657568]">{item.detail}</p></div><time className="shrink-0 text-xs text-[#718073]">{item.date}</time></article>) : <p className="py-8 text-center text-sm text-[#718073]">No operational activity for this period.</p>}</div>

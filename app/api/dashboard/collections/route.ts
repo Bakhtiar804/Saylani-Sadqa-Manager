@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   if (!session || !await isActiveLoginAccount(session.userId)) {
     return Response.json({ error: "Sign in to view collections." }, { status: 401 });
   }
-  if (session.role === "admin") return Response.json({ error: "Use your city-scoped Admin Dashboard." }, { status: 403 });
+  if (session.role === "admin") return Response.json({ error: "Use your city-scoped City Admin Dashboard." }, { status: 403 });
   if (session.role === "rider") return Response.json({ error: "Use your personal Rider Dashboard." }, { status: 403 });
   if (session.role === "city_manager" && !session.cityId) return Response.json({ error: "A city assignment is required." }, { status: 403 });
 

@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   }
 
   if (!isAdminInput(input)) {
-    return Response.json({ error: "Enter the admin name, phone, email, city, and password." }, { status: 400 });
+    return Response.json({ error: "Enter the City Admin name, phone, email, city, and password." }, { status: 400 });
   }
 
   const name = input.name.trim();
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
   }
   if (input.password.length < 12 || input.password.length > 1024) {
     return Response.json(
-      { error: "Admin passwords must be at least 12 characters." },
+      { error: "City Admin passwords must be at least 12 characters." },
       { status: 400 },
     );
   }
@@ -101,14 +101,14 @@ export async function POST(request: Request) {
       error.code === "23505"
     ) {
       return Response.json(
-        { error: "An admin with this email already exists." },
+        { error: "A City Admin with this email already exists." },
         { status: 409 },
       );
     }
 
-    console.error("Could not create admin account.", error);
+    console.error("Could not create City Admin account.", error);
     return Response.json(
-      { error: "Could not save the admin account. Check the server logs." },
+      { error: "Could not save the City Admin account. Check the server logs." },
       { status: 503 },
     );
   }

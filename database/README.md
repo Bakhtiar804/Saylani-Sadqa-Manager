@@ -36,14 +36,14 @@ password is not stored in the seed SQL or database.
 | Role         | Email 1                       | Email 2                       | Password       |
 | ------------ | ----------------------------- | ----------------------------- | -------------- |
 | Super Admin  | `user0089@demo.sadqabox.test` | `user0213@demo.sadqabox.test` | `DemoOnly@123` |
-| Admin        | `user0007@demo.sadqabox.test` | `user0011@demo.sadqabox.test` | `DemoOnly@123` |
-| City Manager | `user0013@demo.sadqabox.test` | `user0039@demo.sadqabox.test` | `DemoOnly@123` |
+| City Admin   | `user0007@demo.sadqabox.test` | `user0011@demo.sadqabox.test` | `DemoOnly@123` |
+| Branch Admin | `user0013@demo.sadqabox.test` | `user0039@demo.sadqabox.test` | `DemoOnly@123` |
 | Rider        | `user0015@demo.sadqabox.test` | `user0021@demo.sadqabox.test` | `DemoOnly@123` |
 
 These are seeded database identities. Sign-in checks their active status and
 password hash in `users`, then reads the role from `roles`. Inactive mock Rider
-accounts cannot sign in. Super Admin can create additional Admin accounts from
-the dashboard; those accounts are saved in `users` with the Admin role.
+accounts cannot sign in. Super Admin can create additional City Admin accounts
+from the dashboard; those accounts are saved in `users` with the City Admin role.
 
 Dashboard operational screens read cities, users, partners, riders, boxes,
 collections, tasks, handovers, inspections, incidents, and costs from these
@@ -89,8 +89,8 @@ that existed in the connected development database when migration was applied.
 | `security_incidents`     |                                          30 |
 | `operational_costs`      |                                          15 |
 
-The mock people include 65 login accounts (2 Super Admin, 8 Admin, 10 City
-Manager, 45 Rider) and 185 Field Staff/Partner identities. The latter have no
+The mock people include 65 login accounts (2 Super Admin, 8 City Admin, 10 Branch Admin, 45 Rider)
+and 185 Field Staff/Partner identities. The latter have no
 role or password hash and are kept because operational records refer to them.
 
 node -e 'const {scrypt,randomBytes}=require("node:crypto"); const p=process.argv[1]; const s=randomBytes(16).toString("base64url"); scrypt(p,s,64,(e,k)=>{if(e)throw e; console.log(`${s}.${Buffer.from(k).toString("base64url")}`)})' 'USMAN12345'

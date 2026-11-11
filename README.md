@@ -70,9 +70,9 @@ The demo sign-in accounts and their local-only password are documented in [datab
 
 ## Roles and account management
 
-- **Super Admin** uses `/dashboard`. It can create Admin, City Manager, and Rider accounts, and remove those roles.
-- **Admin** uses `/dashboard/admin`. It can create or remove City Manager and Rider accounts in its assigned city.
-- **City Manager** uses `/dashboard/manager`. It can create or remove Rider accounts in its assigned city.
+- **Super Admin** uses `/dashboard`. It can create City Admin, Branch Admin, and Rider accounts, and remove those roles.
+- **City Admin** uses `/dashboard/admin`. It can create or remove Branch Admin and Rider accounts in its assigned city.
+- **Branch Admin** uses `/dashboard/manager`. It can create or remove Rider accounts in its assigned city.
 - **Rider** uses `/dashboard/rider` and sees their own tasks and records.
 
 Removing a team account takes two confirmations. It disables sign-in and keeps old collection and audit records. Super Admin accounts cannot be removed from Team Accounts. There is no dashboard option to create another Super Admin; an authorized owner must provision one through the database.
@@ -110,7 +110,7 @@ The smoke command starts and stops the local production app itself. It checks pu
 
 ## Current limits
 
-- Admin and City Manager operations are view-only. Editing, assigning, verifying, and reconciling operational records are not implemented yet.
+- City Admin and Branch Admin operations are view-only. Editing, assigning, verifying, and reconciling operational records are not implemented yet.
 - Riders can view their tasks and records but cannot update tasks or submit collections.
 - Successful password sign-in and account create/delete need a separate acceptance test with safe test accounts.
 - The public leaderboard is open to visitors. Review it before using real organization data.

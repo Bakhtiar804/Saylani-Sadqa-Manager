@@ -15,7 +15,7 @@ const deletableRoles: Record<string, TeamRole[]> = {
   admin: ["city_manager", "rider"],
   city_manager: ["rider"],
 };
-const roleKeyByTitle: Record<TeamAccount["role"], TeamRole> = { Admin: "admin", "City Manager": "city_manager", Rider: "rider" };
+const roleKeyByTitle: Record<TeamAccount["role"], TeamRole> = { "City Admin": "admin", "Branch Admin": "city_manager", Rider: "rider" };
 
 export default function TeamAccountManagement({ actorRole, initialAccounts, cities, assignedCity }: {
   actorRole: "super_admin" | "admin" | "city_manager";
