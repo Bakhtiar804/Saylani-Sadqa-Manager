@@ -5,11 +5,16 @@ import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
 import { getAdminRecords } from "../admin-data";
+import {getInventoryReports} from '@/lib/inventory-reports';
+import type {InventoryFilters} from '@/lib/inventory-reports';
+import ReportedBoxInventory from '@/components/dashboard/reported-box-inventory';
 
-export default async function AdminBoxesPage() {
+export default async function AdminBoxesPage({searchParams}:{searchParams:Promise<InventoryFilters>}) {
   await connection();
   const { cityId, role, records } = await getAdminRecords(["cities", "donationBoxes", "boxStatusHistory", "partners", "users", "riders"] as const);
   if (!cityId || !records) return <PageHeading eyebrow="City Admin workspace" title="Donation Boxes" description="A Super Admin must assign a city to your account before city records are available."/>;
+  const reports=await getInventoryReports(await searchParams,{network:false,cityId});
+  const base=role==='admin'?'/dashboard/admin':'/dashboard/manager';
 
   const boxes = records.donationBoxes;
   const active = boxes.filter((box) => box.box_status === "Active").length;
@@ -17,6 +22,7 @@ export default async function AdminBoxesPage() {
   return <>
     <PageHeading eyebrow="Box management" title="Donation Boxes" description="Register boxes and manage city-scoped inventory and status history."/>
     <DemoNotice/>
+    <ReportedBoxInventory {...reports} base={base} network={false}/>
     {role === "admin" && <BoxRegistrationForm fixedCityId={cityId} cities={records.cities} partners={records.partners} users={records.users} riders={records.riders}/>}
     <MetricGrid items={[
       { label: "Registered boxes", value: boxes.length.toLocaleString("en-PK"), note: "Assigned city", icon: "box", tone: "blue" },

@@ -274,6 +274,32 @@ passed **165 HTTP checks**, including all roles, team edit/delete, rider cash/ta
 flows, audit, inventory, Excel import and logout. Fixture cleanup verified live
 account/collection/report snapshots were unchanged.
 
+## Network Tree to inventory
+
+Selected-city tree links now retain city, reporting year, collection channel and
+snapshot month. Inventory shows the same DB-imported monthly source counts and
+their source rows above individual registered inventory on Super, City and
+Branch pages. Registered records/history also respect the Super Admin city
+selection; City/Branch scopes remain enforced by the server. Missing individual
+IDs/locations are not synthesized from aggregate workbook counts.
+
+Tree hydration tests verified inventory URL changes on city switching and keeps
+year/channel/month. `verify-tree-inventory.mjs` checked authenticated production
+HTML against live DB rows: Faisalabad September 2026 has 8,878 reported boxes
+(8,801 Public + 77 Branch); Branch-only shows 77. City and Branch inventory pages
+ignored a foreign city parameter and displayed only assigned-city source rows.
+All queries were read-only. TypeScript, targeted ESLint and production build
+passed. Temporary production preview was stopped after verification.
+
+## Shared selected city for every inventory link
+
+The tree previously changed its local city while page-heading/footer inventory
+links retained the server's original all-cities filter. Coverage now shares one
+client city selection across the diagram and all three inventory entry points.
+Regression hydration tests switch Karachi to Lahore and assert every inventory
+link carries Lahore plus the same year, month and channel. TypeScript and
+targeted ESLint passed. Server-side inventory city filtering remains unchanged.
+
 ## Limits
 
 These checks cover the implemented flows and confirmed regressions, not a

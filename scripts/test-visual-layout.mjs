@@ -6,6 +6,7 @@ import {createJiti} from 'jiti';
 const jiti=createJiti(import.meta.url,{jsx:{runtime:'automatic'},tsconfigPaths:true});
 const {default:RankingBoard}=await jiti.import('../components/dashboard/ranking-board.tsx');
 const {default:NetworkTree}=await jiti.import('../components/dashboard/network-tree.tsx');
+const {NetworkCitySelection,SelectedCityInventoryLink}=await jiti.import('../components/dashboard/network-city-selection.tsx');
 const {buildNetworkLayout}=await jiti.import('../lib/network-layout.ts');
 const {getPublicPartnerLeaderboard}=await jiti.import('../lib/partner-leaderboard.ts');
 const partnerData={cities:[],partners:[{partner_id:'P1',partner_name:'Company A'},{partner_id:'P2',partner_name:'Company B'},{partner_id:'P3',partner_name:'Company C'}],donationBoxes:[{box_id:'A1',partner_id:'P1',city_id:'K'},{box_id:'A2',partner_id:'P1',city_id:'L'},{box_id:'B1',partner_id:'P2',city_id:'K'}],collections:[
@@ -34,13 +35,19 @@ const cities=[{id:'K',name:'Karachi',reportedBoxes:15,month:'2026-09',registered
 const layout=buildNetworkLayout(cities[0],cities[0].areas);assert.equal(layout.nodes.length,5);assert.equal(layout.edges.length,4);
 for(const edge of layout.edges){const parent=layout.nodes.find(node=>node.id===edge.from),child=layout.nodes.find(node=>node.id===edge.to);assert.ok(Math.abs(Math.hypot(edge.x1-parent.x,edge.y1-parent.y)-parent.radius)<.001);assert.ok(Math.abs(Math.hypot(edge.x2-child.x,edge.y2-child.y)-child.radius)<.001);}
 for(const left of layout.nodes)for(const right of layout.nodes)if(left.id!==right.id&&left.y===right.y)assert.ok(Math.abs(left.x-right.x)>left.radius+right.radius);
-const view=()=>React.createElement(NetworkTree,{cities});
+const inventoryHref='/dashboard/inventory?year=2026&channel=public&month=2026-09';
+const view=()=>React.createElement(NetworkCitySelection,{initialCity:'K'},React.createElement(React.Fragment,null,
+ React.createElement(SelectedCityInventoryLink,{href:inventoryHref,className:'inventory-header-link'},'Open box inventory'),
+ React.createElement(NetworkTree,{cities,inventoryHref}),
+ React.createElement(SelectedCityInventoryLink,{href:inventoryHref,className:'inventory-footer-link'},'Registered box inventory')));
 const dom=new JSDOM(`<div id="root">${renderToString(view())}</div>`,{url:'http://localhost/'});
-globalThis.window=dom.window;globalThis.document=dom.window.document;globalThis.HTMLElement=dom.window.HTMLElement;globalThis.Event=dom.window.Event;globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+globalThis.window=dom.window;globalThis.self=dom.window;globalThis.document=dom.window.document;globalThis.HTMLElement=dom.window.HTMLElement;globalThis.Event=dom.window.Event;globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 const {hydrateRoot}=await import('react-dom/client');let root;const errors=[];
 try {
  await act(async()=>{root=hydrateRoot(document.getElementById('root'),view(),{onRecoverableError:error=>errors.push(error)});});
  assert.equal(document.querySelector('[aria-label="Selected node details"] h3').textContent,'Karachi');assert.equal(document.querySelectorAll('[data-tree-node="area"]').length,2);assert.equal(document.querySelectorAll('[data-tree-node="box"]').length,2);assert.equal(document.querySelectorAll('[data-tree-edge]').length,4);
+ assert.equal(new URL(document.querySelector('[aria-label="Selected node details"] a').href).searchParams.get('city'),'K');
+ for(const link of document.querySelectorAll('a'))assert.equal(new URL(link.href).searchParams.get('city'),'K');
  await act(async()=>document.querySelector('[data-node-id="box:B1"]').click());assert.ok(document.querySelector('[aria-label="Selected node details"]').textContent.includes('Rider One'));assert.ok(document.querySelector('[aria-label="Selected node details"]').textContent.includes('QR1'));
  await act(async()=>document.querySelector('[data-node-id="area:Gulshan"]').click());
  const collapse=[...document.querySelectorAll('button')].find(button=>button.textContent==='Collapse boxes');await act(async()=>collapse.click());assert.equal(document.querySelectorAll('[data-tree-node="box"]').length,1);
@@ -49,6 +56,8 @@ try {
  const diagram=document.querySelector('[aria-label="Karachi tree diagram, scroll to explore"]');Object.defineProperty(diagram,'clientWidth',{configurable:true,value:400});await act(async()=>[...document.querySelectorAll('button')].find(button=>button.textContent==='Fit tree').click());assert.ok(document.body.textContent.includes(String(Math.round((400-48)/layout.width*100))+'%'));
  const cityButtons=[...document.querySelector('[aria-label="Choose city"]').querySelectorAll('button')];await act(async()=>cityButtons[1].click());
  assert.equal(document.querySelector('[aria-label="Selected node details"] h3').textContent,'Lahore');assert.equal(document.querySelectorAll('[data-tree-node="box"]').length,0);assert.ok(document.body.textContent.includes('Area details not supplied'));
+ assert.equal(new URL(document.querySelector('[aria-label="Selected node details"] a').href).searchParams.get('city'),'L');
+ for(const link of document.querySelectorAll('a')){const params=new URL(link.href).searchParams;assert.equal(params.get('city'),'L');assert.equal(params.get('year'),'2026');assert.equal(params.get('channel'),'public');assert.equal(params.get('month'),'2026-09');}
  assert.deepEqual(errors,[]);console.log('PASS circular tree/edges, node details, collapse/expand, zoom, city switching, missing-area state and hydration');
  const reportedCity={id:'F',name:'Faisalabad',reportedBoxes:8878,registeredBoxes:0,month:'2026-09',reportingYear:'2026',reportedCollection:160965499,areas:[],reports:[{channel:'public',amount:150000000,boxes:8000,records:9},{channel:'branch',amount:10965499,boxes:878,records:9}]};
  await act(async()=>root.render(React.createElement(NetworkTree,{cities:[reportedCity]})));

@@ -25,6 +25,11 @@ statuses display once; differing employment status has an explicit label.
 
 ## Individual operational records
 
+Network Tree's city inventory link preserves its city, year, channel and source
+snapshot month. Inventory first shows reported monthly box counts/source rows
+from the same imported DB records, then individual registered boxes and history.
+Reported counts do not imply individual box IDs or locations exist in the workbook.
+
 1. A City Admin registers a box through Network Tree → Registered box inventory.
    The database-backed diagram groups it under its city and area. The tree uses
    circular nodes and straight connecting lines. Select a node for details,

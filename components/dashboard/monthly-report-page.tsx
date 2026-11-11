@@ -14,6 +14,7 @@ import { getNetworkTree } from '@/lib/network-tree';
 import { buildExpenseTrend } from '@/lib/expense-trend';
 import AutoFilterForm from './auto-filter-form';
 import ReportAnalytics from './report-analytics';
+import {NetworkCitySelection,SelectedCityInventoryLink} from './network-city-selection';
 
 export type ReportPageProps = { searchParams: Promise<MonthlyReportFilters> };
 const fieldClass = 'h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm text-[#203526]';
@@ -34,6 +35,7 @@ export default async function MonthlyReportPage({searchParams,view='overview'}: 
   const base = session.role==='admin'?'/dashboard/admin':session.role==='city_manager'?'/dashboard/manager':'/dashboard';
   const cityName = scope.network ? options.cities.find(city=>city.city_id===data.cityId)?.city_name || 'All reporting cities' : options.cities[0]?.city_name || 'Assigned city';
   const expenseTrend=buildExpenseTrend(data.monthly,data.year);
+  const inventoryHref=`${base}/inventory?${new URLSearchParams({year:data.year,city:data.cityId||'all',channel:data.channel,...(data.latestMonth?{month:data.latestMonth}:{})})}`;
   const period = data.monthly.length ? `${data.monthly[0].month} to ${data.monthly.at(-1)!.month}` : 'No reports in this selection';
   const noData = view==='expenses' ? !data.expenses.length : view==='coverage' ? !data.latestBoxes.length && !data.staff.length : !data.collections.length;
   const amountLabel = (rows: typeof data.collections,total: number) => rows.some(row=>row.amount_pkr!==null) ? formatPKR(total) : 'Not reported';
@@ -42,8 +44,8 @@ export default async function MonthlyReportPage({searchParams,view='overview'}: 
   const tableRows = data.collections.map(row=>({...row,channel:row.channel==='public'?'Public':'Branch',
     amount_state:row.amount_pkr===null?'Not reported':'Reported'}));
   const tree = view==='coverage' ? await getNetworkTree(scope,{cityId:data.cityId,month:data.latestMonth,channel:data.channel,year:data.year}) : null;
-  return <>
-    <PageHeading eyebrow={`${cityName} · ${period}`} title={titles[view]} description="Actual monthly figures supplied · Public & branch reporting." actions={view==='coverage'?<Link href={`${base}/inventory`} className="rounded-xl bg-[#276431] px-4 py-3 text-sm font-semibold text-white">Open box inventory →</Link>:undefined}/>
+  const content=<>
+    <PageHeading eyebrow={`${cityName} · ${period}`} title={titles[view]} description="Actual monthly figures supplied · Public & branch reporting." actions={view==='coverage'?<SelectedCityInventoryLink href={inventoryHref} className="rounded-xl bg-[#276431] px-4 py-3 text-sm font-semibold text-white">Open box inventory →</SelectedCityInventoryLink>:undefined}/>
     <AutoFilterForm path={base+({overview:'',collections:'/collections',expenses:'/finance',coverage:'/boxes',analytics:'/analytics'} as const)[view]} stateKey={JSON.stringify([data.year,data.cityId,data.channel])} className="mb-6 flex flex-wrap items-end gap-3 rounded-2xl border border-[#e3ebe0] bg-white p-4">
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Year<select name="year" defaultValue={data.year} className={fieldClass}><option value="all">All available years</option>{options.years.map(year=><option key={year}>{year}</option>)}</select></label>
       {scope.network && <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">City<select name="city" defaultValue={data.cityId || 'all'} className={fieldClass}><option value="all">All reporting cities</option>{options.cities.map(city=><option key={city.city_id} value={city.city_id}>{city.city_name}</option>)}</select></label>}
@@ -56,7 +58,7 @@ export default async function MonthlyReportPage({searchParams,view='overview'}: 
       {data.totals.missingAmounts+data.totals.missingExpenses>0 && <span className="block font-semibold">Selected reports: {data.totals.missingAmounts} collection amounts and {data.totals.missingExpenses} expense amounts are not reported. Totals show available amounts.</span>}
     </div></details>
     {noData && !tree?.some(city=>city.registeredBoxes>0) ? <section className="rounded-2xl border border-[#e3ebe0] bg-white p-8 text-center"><h2 className="text-lg font-bold">No source reports for this selection</h2><p className="mt-2 text-sm text-[#657568]">Choose another year or city. No figures have been estimated.</p></section> : <>
-      {tree && <NetworkTree cities={tree} inventoryHref={`${base}/inventory`}/>}
+      {tree && <NetworkTree cities={tree} inventoryHref={inventoryHref}/>}
       {view==='expenses' ? <MetricGrid items={[
         {label:'Operational cost',value:amountLabel(data.expenses,data.totals.expenses),note:'Fuel, salary and other recorded operating expenses',icon:'cash',tone:'orange'},
         {label:'Expense categories',value:data.categories.length,note:'As supplied in the workbook',icon:'chart',tone:'blue'},
@@ -96,8 +98,9 @@ export default async function MonthlyReportPage({searchParams,view='overview'}: 
       </> : <RecordExplorer title="Monthly collection reports" description="One city, month and channel per row. Expand to see source sheet and row." records={tableRows} columns={[{key:'report_id',label:'Report ID'},{key:'month',label:'Month'},{key:'city_name',label:'City'},{key:'channel',label:'Channel'},{key:'box_count',label:'Boxes'},{key:'amount_pkr',label:'Amount'},{key:'amount_state',label:'Amount status'}]} statusKey="channel" cities={options.cities} initialSortKey="month"/>}
       </details>
     </>}
-    <div className="mt-6 flex flex-wrap gap-4 text-sm font-semibold text-[#276431]"><Link href={`${base}/transactions`}>Individual collection register →</Link><Link href={`${base}/inventory`}>Registered box inventory →</Link>{scope.network && <Link href="/dashboard/handovers">Cash handover register →</Link>}</div>
+    <div className="mt-6 flex flex-wrap gap-4 text-sm font-semibold text-[#276431]"><Link href={`${base}/transactions`}>Individual collection register →</Link><SelectedCityInventoryLink href={inventoryHref}>Registered box inventory →</SelectedCityInventoryLink>{scope.network && <Link href="/dashboard/handovers">Cash handover register →</Link>}</div>
     {scope.network && view==='analytics' && <nav aria-label="Related records" className="mt-5 grid gap-3 sm:grid-cols-3">{[['/dashboard/operations','Field operations'],['/dashboard/partners','Partner directory'],['/dashboard/users','User directory']].map(([href,label])=><Link key={href} href={href} className="rounded-xl border border-[#dce8dc] bg-white p-4 text-sm font-semibold text-[#276431]">{label} →</Link>)}</nav>}
   </>;
+  return view==='coverage'?<NetworkCitySelection key={JSON.stringify([data.year,data.cityId,data.channel])} initialCity={tree?.[0]?.id||data.cityId||'all'}>{content}</NetworkCitySelection>:content;
 }
 
