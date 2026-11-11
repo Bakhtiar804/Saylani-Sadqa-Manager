@@ -1,4 +1,5 @@
-import { createTeamAccount, isActiveLoginAccount } from "@/lib/admin-accounts";
+import { withApiErrors } from '@/lib/api-errors';
+import { createTeamAccount, isCurrentLoginSession } from "@/lib/admin-accounts";
 import { hashPassword } from "@/lib/auth";
 import { hasValidRequestOrigin } from "@/lib/operations-auth";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
@@ -27,12 +28,12 @@ function isAdminInput(value: unknown): value is AdminInput {
   );
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const cookieStore = await cookies();
   const session = verifyUserSession(
     cookieStore.get(SESSION_COOKIE_NAME)?.value,
   );
-  if (!session || !await isActiveLoginAccount(session.userId) || session.role !== "super_admin") {
+  if (!session || !await isCurrentLoginSession(session) || session.role !== "super_admin") {
     return Response.json({ error: "Super-admin access is required." }, { status: 403 });
   }
 
@@ -113,3 +114,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withApiErrors(handlePOST);

@@ -1,9 +1,10 @@
+import { withApiErrors } from '@/lib/api-errors';
 import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
 import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-auth";
 
-export async function POST(request: Request, context: { params: Promise<{ taskId: string }> }) {
+async function handlePOST(request: Request, context: { params: Promise<{ taskId: string }> }) {
   const session = await getOperationsSession();
   if (!session) return Response.json({ error: "Sign in to submit a collection." }, { status: 401 });
   if (session.role !== "rider") return Response.json({ error: "Only a rider can submit a field collection." }, { status: 403 });
@@ -23,23 +24,23 @@ export async function POST(request: Request, context: { params: Promise<{ taskId
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
-    const result = await client.query<{ task_id: string; task_status: string; box_id: string; rider_id: string; city_id: string; partner_id: string | null; box_status: string }>(`
-      SELECT task.task_id, task.task_status, task.box_id, task.rider_id,
+    const result = await client.query<{ task_id: string; task_status: string; task_type:string; box_id: string; rider_id: string; city_id: string; partner_id: string | null; box_status: string }>(`
+      SELECT task.task_id, task.task_status, task.task_type, task.box_id, task.rider_id,
         box.city_id, box.partner_id, box.box_status
       FROM rider_tasks task
       JOIN riders rider ON rider.rider_id = task.rider_id
       JOIN donation_boxes box ON box.box_id = task.box_id
-      WHERE task.task_id = $1 AND rider.user_id = $2
-      FOR UPDATE OF task
+      WHERE task.task_id = $1 AND rider.user_id = $2 AND rider.employment_status='Active'
+      FOR UPDATE OF task, box
     `, [taskId, session.userId]);
     const task = result.rows[0];
     if (!task) {
       await client.query("ROLLBACK");
       return Response.json({ error: "This task is not assigned to your account." }, { status: 404 });
     }
-    if (task.task_status === "Completed") {
+    if (!['Assigned','In Progress'].includes(task.task_status) || task.task_type!=='Scheduled Collection') {
       await client.query("ROLLBACK");
-      return Response.json({ error: "This task already has a completed collection." }, { status: 409 });
+      return Response.json({ error: "Only an active collection task can receive cash. Resume a skipped task first." }, { status: 409 });
     }
     if (task.box_status !== "Active") {
       await client.query("ROLLBACK");
@@ -51,9 +52,9 @@ export async function POST(request: Request, context: { params: Promise<{ taskId
       INSERT INTO collections (
         collection_id, box_id, rider_id, city_id, partner_id, collection_date, collection_time,
         collection_amount_pkr, collection_status, recorded_by_user_id, notes, is_demo_record
-      ) VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, LOCALTIME, $6, 'Pending Verification', $7, $8, FALSE)
+      ) VALUES ($1, $2, $3, $4, $5, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::date, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time, $6, 'Pending Verification', $7, $8, FALSE)
     `, [collectionId, task.box_id, task.rider_id, task.city_id, task.partner_id, amount, session.userId, notes || null]);
-    await client.query(`UPDATE rider_tasks SET task_status = 'Completed', completion_time = LOCALTIME WHERE task_id = $1`, [taskId]);
+    await client.query(`UPDATE rider_tasks SET task_status = 'Completed', completion_time = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time WHERE task_id = $1`, [taskId]);
     await client.query(`
       INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_user_id, before_data, after_data)
       VALUES ($1, 'collection', $2, 'submitted', $3, NULL, $4::jsonb)
@@ -67,3 +68,5 @@ export async function POST(request: Request, context: { params: Promise<{ taskId
     return Response.json({ error: "The collection could not be saved." }, { status: 503 });
   } finally { client.release(); }
 }
+
+export const POST = withApiErrors(handlePOST);

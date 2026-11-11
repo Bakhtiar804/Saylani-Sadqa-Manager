@@ -1,5 +1,10 @@
 # Saylani Sadqa Manager
 
+**Current data mode:** the main dashboards now use the supplied real monthly
+donation and expense workbook. Read [REAL_DATA.md](REAL_DATA.md) for its meaning,
+source reconciliation, safe import commands, city scoping and operational routes.
+Older demo setup and historical limits below do not describe the current reporting views.
+
 This app helps a team manage donation boxes, collections, riders, partners, cash handovers, inspections, and incidents. The included sample data is for development only. It is not live financial information.
 
 ## What you need

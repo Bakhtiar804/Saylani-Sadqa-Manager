@@ -12,6 +12,6 @@ export default async function RiderTasksPage() {
   return <>
     <PageHeading eyebrow={`${data.profile.city_name || "City not assigned"} · ${data.profile.assigned_zone}`} title="My Tasks" description="Update assigned field tasks and submit collections for review."/>
     <DemoNotice/>
-    <RiderTaskActions tasks={data.tasks}/>
+    <RiderTaskActions tasks={data.tasks} canWork={data.profile.employment_status==='Active'}/>
   </>;
 }

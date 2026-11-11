@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchResponse } from '@/lib/client-request';
+
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { CityOption, DataRecord } from "@/lib/dashboard-types";
@@ -28,7 +30,7 @@ export default function BoxRegistrationForm({ cities, partners, users, riders, f
     const form = event.currentTarget;
     const values = Object.fromEntries(new FormData(form).entries());
     try {
-      const response = await fetch("/api/dashboard/boxes", {
+      const response = await fetchResponse("/api/dashboard/boxes", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...values, cityId }),
       });
@@ -48,6 +50,7 @@ export default function BoxRegistrationForm({ cities, partners, users, riders, f
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Box ID<input name="boxId" required minLength={3} maxLength={16} pattern="[A-Za-z0-9-]+" placeholder="BOX-NEW-001" className="h-10 rounded-lg border border-[#dce8dc] px-3 text-sm font-normal text-[#203526]"/></label>
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">QR code<input name="qrCode" required minLength={3} maxLength={40} pattern="[A-Za-z0-9-]+" placeholder="QR-BOX-NEW-001" className="h-10 rounded-lg border border-[#dce8dc] px-3 text-sm font-normal text-[#203526]"/></label>
       {!fixedCityId && <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">City<select value={cityId} onChange={(event) => setCityId(event.target.value)} required className="h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#203526]"><option value="">Choose a city</option>{cities.map((city) => <option key={city.city_id} value={city.city_id}>{city.city_name}</option>)}</select></label>}
+      <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">District<input name="district" maxLength={100} placeholder="e.g. Karachi East" className="h-10 rounded-lg border border-[#dce8dc] px-3 text-sm font-normal text-[#203526]"/></label>
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Area<input name="area" required maxLength={100} placeholder="Neighborhood or zone" className="h-10 rounded-lg border border-[#dce8dc] px-3 text-sm font-normal text-[#203526]"/></label>
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Location type<input name="locationType" required maxLength={40} placeholder="Mosque, shop, home..." className="h-10 rounded-lg border border-[#dce8dc] px-3 text-sm font-normal text-[#203526]"/></label>
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Installation date<input name="installationDate" type="date" required className="h-10 rounded-lg border border-[#dce8dc] px-3 text-sm font-normal text-[#203526]"/></label>

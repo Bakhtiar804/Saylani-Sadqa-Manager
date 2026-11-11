@@ -113,10 +113,10 @@ export default function Sidebar({
           </span>
           <b className="text-[13px] text-[#203a27]">Need a hand?</b>
           <p className="my-1.5 text-xs leading-relaxed text-[#657568]">
-            Your workspace is using fictional demo records.
+            Monthly source reports and individual field records are available in your workspace.
           </p>
           <span className="text-xs font-semibold text-[#276431]">
-            Demo environment
+            Donation operations
           </span>
         </div>
         <div className="flex items-center gap-2.5 border-t border-[#edf1eb] px-1 pt-3.5 max-[900px]:justify-center">

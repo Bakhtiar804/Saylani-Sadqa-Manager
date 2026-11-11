@@ -1,26 +1,24 @@
-import { createTeamAccount, isActiveLoginAccount, listTeamAccounts, softDeleteTeamAccount, TeamAccountDeleteError, type TeamRole } from "@/lib/admin-accounts";
+import { withApiErrors } from '@/lib/api-errors';
+import { createTeamAccount, isCurrentLoginSession, listTeamAccounts, softDeleteTeamAccount, TeamAccountDeleteError, type TeamRole } from "@/lib/admin-accounts";
 import { hashPassword } from "@/lib/auth";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 import { getDatabasePool } from "@/lib/db";
 import { hasValidRequestOrigin } from "@/lib/operations-auth";
 import { cookies } from "next/headers";
+import { creatableRoles, deletableRoles } from '@/lib/permissions';
 
-const allowedRoles: Record<string, readonly TeamRole[]> = {
-  super_admin: ["admin", "city_manager", "rider"],
-  admin: ["city_manager", "rider"],
-  city_manager: ["rider"],
-};
+const allowedRoles = creatableRoles;
 
 async function getSession() {
   const cookieStore = await cookies();
   const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
-  if (!session || !await isActiveLoginAccount(session.userId)) return null;
+  if (!session || !await isCurrentLoginSession(session)) return null;
   return session;
 }
 
-export async function DELETE(request: Request) {
+async function handleDELETE(request: Request) {
   const session = await getSession();
-  if (!session || !allowedRoles[session.role]) {
+  if (!session || !deletableRoles[session.role].length) {
     return Response.json({ error: "Team management access is required." }, { status: 403 });
   }
   if (!hasValidRequestOrigin(request)) {
@@ -47,9 +45,9 @@ export async function DELETE(request: Request) {
   }
 }
 
-export async function GET() {
+async function handleGET() {
   const session = await getSession();
-  if (!session || !allowedRoles[session.role]) {
+  if (!session || !allowedRoles[session.role].length) {
     return Response.json({ error: "Team management access is required." }, { status: 403 });
   }
   try {
@@ -61,9 +59,9 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const session = await getSession();
-  if (!session || !allowedRoles[session.role]) {
+  if (!session || !allowedRoles[session.role].length) {
     return Response.json({ error: "Team management access is required." }, { status: 403 });
   }
   if (!hasValidRequestOrigin(request)) {
@@ -103,7 +101,7 @@ export async function POST(request: Request) {
   if (password.length < 12 || password.length > 1024) {
     return Response.json({ error: "Passwords must be between 12 and 1024 characters." }, { status: 400 });
   }
-  const cityId = session.role === "super_admin" || session.role === "admin"
+  const cityId = session.role === "super_admin"
     ? (typeof requestedCity === "string" ? requestedCity.trim() : "")
     : session.cityId ?? "";
   if (!cityId) return Response.json({ error: "Select or assign a city before creating this account." }, { status: 400 });
@@ -139,3 +137,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Could not save the account. Check the server logs." }, { status: 503 });
   }
 }
+
+export const DELETE = withApiErrors(handleDELETE);
+export const GET = withApiErrors(handleGET);
+export const POST = withApiErrors(handlePOST);

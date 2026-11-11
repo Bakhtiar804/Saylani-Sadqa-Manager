@@ -13,11 +13,11 @@ export type RecordColumn = {
 };
 
 export type ChartDatum = {
-  [key: string]: string | number | undefined;
+  [key: string]: string | number | null | undefined;
   name?: string;
   label?: string;
   month?: string;
-  value?: number;
+  value?: number | null;
   collection?: number;
   collections?: number;
   color?: string;

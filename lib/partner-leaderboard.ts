@@ -86,10 +86,18 @@ export function getPartnerLeaderboardData(data: LeaderboardData) {
 }
 
 export function getPublicPartnerLeaderboard(data: LeaderboardData) {
-  return getPartnerLeaderboardData(data).partners.map((partner) => ({
-    rank: partner.rank,
-    partnerName: partner.partner_name,
-    installedBoxes: partner.installed_boxes,
-    verifiedFunds: partner.verified_amount_pkr,
-  }));
+  const boxesById = new Map(data.donationBoxes.map(box => [String(box.box_id), box]));
+  // Preserve the partner recorded at collection time. Legacy entries without a
+  // partner can still be attributed through their registered box.
+  const published = data.collections.filter(row => row.collection_status === 'Verified');
+  return data.partners.map(partner => {
+    const partnerId = String(partner.partner_id);
+    const installedBoxes = data.donationBoxes.filter(box => String(box.partner_id ?? '') === partnerId).length;
+    const verifiedFunds = published.reduce((sum, row) => {
+      const recordedPartner = row.partner_id || boxesById.get(String(row.box_id))?.partner_id;
+      return String(recordedPartner ?? '') === partnerId ? sum + Number(row.collection_amount_pkr || 0) : sum;
+    }, 0);
+    return { partnerId, partnerName: String(partner.partner_name), installedBoxes, verifiedFunds };
+  }).sort((a,b) => b.verifiedFunds-a.verifiedFunds || b.installedBoxes-a.installedBoxes || a.partnerName.localeCompare(b.partnerName))
+    .map((partner,index) => ({...partner,rank:index+1}));
 }

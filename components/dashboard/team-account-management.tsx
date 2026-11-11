@@ -1,17 +1,20 @@
 "use client";
 
+import { fetchResponse } from '@/lib/client-request';
+
 import { useState, type FormEvent } from "react";
 import type { CityOption } from "@/lib/dashboard-types";
 import type { TeamAccount, TeamRole } from "@/lib/admin-accounts";
+import { creatableRoles, deletableRoles as roleDeletionPolicy } from '@/lib/permissions';
 
 const roleTitles: Record<TeamRole, string> = { admin: "City Admin", city_manager: "Branch Admin", rider: "Rider" };
 const allowedRoles: Record<string, TeamRole[]> = {
-  super_admin: ["admin", "city_manager", "rider"],
+  super_admin: [...creatableRoles.super_admin],
   admin: ["city_manager", "rider"],
   city_manager: ["rider"],
 };
 const deletableRoles: Record<string, TeamRole[]> = {
-  super_admin: ["admin", "city_manager", "rider"],
+  super_admin: [...roleDeletionPolicy.super_admin],
   admin: ["city_manager", "rider"],
   city_manager: ["rider"],
 };
@@ -44,7 +47,7 @@ export default function TeamAccountManagement({ actorRole, initialAccounts, citi
     setIsDeleting(true);
     setDeleteError("");
     try {
-      const response = await fetch("/api/team-accounts", {
+      const response = await fetchResponse("/api/team-accounts", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: deletingAccount.id, confirmedEmail: typedEmail }),
@@ -78,13 +81,13 @@ export default function TeamAccountManagement({ actorRole, initialAccounts, citi
     setIsSaving(true);
     setMessage("");
     try {
-      const response = await fetch("/api/team-accounts", {
+      const response = await fetchResponse("/api/team-accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: formData.get("name"), phone: formData.get("phone"), email: formData.get("email"), password, role,
           accountStatus: formData.get("accountStatus"),
-          cityId: actorRole === "city_manager" ? assignedCity?.cityId : cityId,
+          cityId: actorRole !== "super_admin" ? assignedCity?.cityId : cityId,
           assignedZone: formData.get("assignedZone"),
           employmentStatus: formData.get("employmentStatus"),
         }),
@@ -112,7 +115,7 @@ export default function TeamAccountManagement({ actorRole, initialAccounts, citi
         <label className="grid gap-1.5 text-sm font-semibold text-[#344639]">Phone number<input name="phone" type="tel" autoComplete="tel" inputMode="tel" maxLength={32} minLength={7} pattern="[+0-9(). -]{7,32}" required placeholder="+92 300 1234567" className="h-11 rounded-xl border border-[#dce8dc] px-3 text-sm font-normal outline-none focus:border-[#276431] focus:ring-4 focus:ring-[#61bb46]/15"/></label>
         <label className="grid gap-1.5 text-sm font-semibold text-[#344639]">Email address<input name="email" type="email" autoComplete="email" maxLength={254} required className="h-11 rounded-xl border border-[#dce8dc] px-3 text-sm font-normal outline-none focus:border-[#276431] focus:ring-4 focus:ring-[#61bb46]/15"/></label>
         <label className="grid gap-1.5 text-sm font-semibold text-[#344639]">Role<select value={role} onChange={(event) => setRole(event.target.value as TeamRole)} className="h-11 rounded-xl border border-[#dce8dc] bg-white px-3 text-sm font-normal outline-none focus:border-[#276431] focus:ring-4 focus:ring-[#61bb46]/15">{allowedRoles[actorRole].map((item) => <option key={item} value={item}>{roleTitles[item]}</option>)}</select></label>
-        {actorRole !== "city_manager" ? <label className="grid gap-1.5 text-sm font-semibold text-[#344639]">Assigned city<select value={cityId} onChange={(event) => setCityId(event.target.value)} required className="h-11 rounded-xl border border-[#dce8dc] bg-white px-3 text-sm font-normal outline-none focus:border-[#276431] focus:ring-4 focus:ring-[#61bb46]/15"><option value="">Choose a city</option>{cities.map((city) => <option key={city.city_id} value={city.city_id}>{city.city_name} ({city.province})</option>)}</select></label> : <label className="grid gap-1.5 text-sm font-semibold text-[#344639]">Assigned city<select defaultValue={assignedCity?.cityId ?? ""} required className="h-11 rounded-xl border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#344639] outline-none focus:border-[#276431] focus:ring-4 focus:ring-[#61bb46]/15"><option value={assignedCity?.cityId ?? ""}>{assignedCity?.cityName ?? "City assignment required"}</option></select><span className="text-xs font-normal text-[#718073]">Accounts created here are assigned to your city.</span></label>}
+        {actorRole === "super_admin" ? <label className="grid gap-1.5 text-sm font-semibold text-[#344639]">Assigned city<select value={cityId} onChange={(event) => setCityId(event.target.value)} required className="h-11 rounded-xl border border-[#dce8dc] bg-white px-3 text-sm font-normal outline-none focus:border-[#276431] focus:ring-4 focus:ring-[#61bb46]/15"><option value="">Choose a city</option>{cities.map((city) => <option key={city.city_id} value={city.city_id}>{city.city_name} ({city.province})</option>)}</select></label> : <label className="grid gap-1.5 text-sm font-semibold text-[#344639]">Assigned city<select defaultValue={assignedCity?.cityId ?? ""} required className="h-11 rounded-xl border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#344639] outline-none focus:border-[#276431] focus:ring-4 focus:ring-[#61bb46]/15"><option value={assignedCity?.cityId ?? ""}>{assignedCity?.cityName ?? "City assignment required"}</option></select><span className="text-xs font-normal text-[#718073]">Accounts created here are assigned to your city.</span></label>}
         {role === "rider" && <label className="grid gap-1.5 text-sm font-semibold text-[#344639]">Assigned zone<input name="assignedZone" type="text" maxLength={80} required placeholder="For example, North Zone" className="h-11 rounded-xl border border-[#dce8dc] px-3 text-sm font-normal outline-none focus:border-[#276431] focus:ring-4 focus:ring-[#61bb46]/15"/></label>}
         {role === "rider" && <label className="grid gap-1.5 text-sm font-semibold text-[#344639]">Employment status<select name="employmentStatus" defaultValue="Active" required className="h-11 rounded-xl border border-[#dce8dc] bg-white px-3 text-sm font-normal outline-none focus:border-[#276431] focus:ring-4 focus:ring-[#61bb46]/15"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></label>}
         <label className="grid gap-1.5 text-sm font-semibold text-[#344639]">Login account status<select name="accountStatus" defaultValue="active" required className="h-11 rounded-xl border border-[#dce8dc] bg-white px-3 text-sm font-normal outline-none focus:border-[#276431] focus:ring-4 focus:ring-[#61bb46]/15"><option value="active">Active</option><option value="inactive">Inactive</option><option value="suspended">Suspended</option></select></label>

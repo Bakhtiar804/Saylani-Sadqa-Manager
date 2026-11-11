@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchResponse } from '@/lib/client-request';
+
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { DataRecord } from "@/lib/dashboard-types";
@@ -42,7 +44,7 @@ export default function RiderAssignmentForm({ riders, boxes }: { riders: DataRec
     const form = event.currentTarget;
     const values = Object.fromEntries(new FormData(form).entries());
     try {
-      const response = await fetch("/api/dashboard/rider-assignments", {
+      const response = await fetchResponse("/api/dashboard/rider-assignments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...values, riderId, taskType }),

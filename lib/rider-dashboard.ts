@@ -6,7 +6,8 @@ import { redirect } from "next/navigation";
 import { DASHBOARD_DATA_CACHE_TAG } from "@/lib/dashboard-data";
 import { getDatabasePool } from "@/lib/db";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
-import type { DataRecord } from "@/lib/dashboard-types";
+import { normalizeRecordRows } from './record-values';
+import { isCurrentLoginSession } from './admin-accounts';
 
 type RiderProfile = {
   rider_id: string;
@@ -20,18 +21,12 @@ type RiderProfile = {
   employment_status: string;
 };
 
-function normalizeRows(rows: Record<string, unknown>[]): DataRecord[] {
-  return rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => {
-    if (value instanceof Date) return [key, value.toISOString()];
-    if (typeof value === "string" && /(amount|pkr|cash|discrepancy)/i.test(key)) return [key, Number(value)];
-    return [key, value as DataRecord[string]];
-  })));
-}
+const normalizeRows=normalizeRecordRows;
 
 export async function getRiderSession() {
   const cookieStore = await cookies();
   const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
-  if (!session) redirect("/sign-in");
+  if (!session || !await isCurrentLoginSession(session)) redirect("/sign-in");
   if (session.role !== "rider") redirect("/dashboard");
   return session;
 }
@@ -93,7 +88,7 @@ export async function getRiderDashboard(userId: string) {
         (SELECT COUNT(*)::int FROM rider_tasks WHERE rider_id = $1 AND task_status IN ('Assigned', 'In Progress')) AS open_tasks,
         (SELECT COUNT(*)::int FROM donation_boxes WHERE assigned_rider_id = $1 AND box_status = 'Active') AS active_boxes,
         (SELECT COUNT(*)::int FROM collections WHERE rider_id = $1) AS collection_count,
-        (SELECT COALESCE(SUM(collection_amount_pkr), 0) FROM collections WHERE rider_id = $1 AND collection_status = 'Verified') AS verified_total
+        (SELECT COALESCE(SUM(collection_amount_pkr), 0) FROM collections WHERE rider_id = $1) AS verified_total
     `, [profile.rider_id]),
   ]);
   const summary = summaryResult.rows[0] ?? {};

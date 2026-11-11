@@ -36,7 +36,7 @@ export function Footer() {
             <ul className="mt-4 space-y-3 text-sm text-primary-foreground/75">
               <li>Daily, weekly, and monthly summaries</li>
               <li>City and box-level comparisons</li>
-              <li>Collection verification and audit history</li>
+              <li>Collection records and audit history</li>
             </ul>
           </div>
         </div>

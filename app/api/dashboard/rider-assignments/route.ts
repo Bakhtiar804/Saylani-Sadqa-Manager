@@ -1,3 +1,4 @@
+import { withApiErrors } from '@/lib/api-errors';
 import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
@@ -5,10 +6,10 @@ import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-au
 
 const taskTypes = ["Scheduled Collection", "Box Verification", "Follow-up Visit"] as const;
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const session = await getOperationsSession();
   if (!session) return Response.json({ error: "Sign in to assign a rider." }, { status: 401 });
-  if (session.role !== "super_admin") return Response.json({ error: "Only a Super Admin can assign rider tasks." }, { status: 403 });
+  if (!['admin', 'city_manager'].includes(session.role) || !session.cityId) return Response.json({ error: "A city-scoped operational account is required." }, { status: 403 });
   if (!hasValidRequestOrigin(request)) return Response.json({ error: "Invalid request origin." }, { status: 403 });
 
   let input: unknown;
@@ -41,6 +42,10 @@ export async function POST(request: Request) {
       FOR UPDATE OF rider
     `, [riderId]);
     const rider = riderResult.rows[0];
+    if (rider && rider.city_id !== session.cityId) {
+      await client.query('ROLLBACK');
+      return Response.json({ error: 'This rider is outside your city.' }, { status: 403 });
+    }
     if (!rider) {
       await client.query("ROLLBACK");
       return Response.json({ error: "Choose an active rider." }, { status: 400 });
@@ -83,3 +88,5 @@ export async function POST(request: Request) {
     client.release();
   }
 }
+
+export const POST = withApiErrors(handlePOST);

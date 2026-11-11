@@ -33,7 +33,7 @@ const features = [
   },
   {
     title: "Audit & Accountability",
-    caption: "Review who verified or changed a record.",
+    caption: "Trace collections and record changes.",
     outline: "M24 6l15 6v10c0 9-6 16-15 20-9-4-15-11-15-20V12z",
     detail: "m17 24 5 5 9-10",
   },

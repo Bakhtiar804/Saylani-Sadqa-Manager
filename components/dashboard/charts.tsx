@@ -21,7 +21,7 @@ const pkr = (value: unknown) => `Rs ${Math.round(Number(value) || 0).toLocaleStr
 
 type CollectionPoint = {
   label: string;
-  collections: number;
+  collections: number | null;
 };
 
 type ChartProps = {
@@ -29,8 +29,8 @@ type ChartProps = {
   height?: number;
 };
 
-export function CollectionTrendChart({ data, height = 300 }: { data: CollectionPoint[]; height?: number }) {
-  return <div style={{ height }} className="w-full min-w-0"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}><defs><linearGradient id="collectionArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#61bb46" stopOpacity={0.23}/><stop offset="95%" stopColor="#61bb46" stopOpacity={0.015}/></linearGradient></defs><CartesianGrid stroke="#e9efe7" strokeDasharray="4 5" vertical={false}/><XAxis dataKey="label" tick={{ fill: "#718073", fontSize: 12 }} tickLine={false} axisLine={false} minTickGap={18}/><YAxis tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} tick={{ fill: "#718073", fontSize: 12 }} tickLine={false} axisLine={false} width={54}/><Tooltip formatter={(value) => [pkr(value), "Verified collections"]} labelStyle={{ color: "#192d21", fontWeight: 700 }} contentStyle={{ border: "1px solid #dce8dc", borderRadius: 12, fontSize: 13 }}/><Area type="monotone" dataKey="collections" stroke="#276431" strokeWidth={3} fill="url(#collectionArea)" activeDot={{ r: 5, strokeWidth: 2, fill: "#fff", stroke: "#276431" }}/></AreaChart></ResponsiveContainer></div>;
+export function CollectionTrendChart({ data, height = 300, seriesLabel = 'Recorded collections' }: { data: CollectionPoint[]; height?: number; seriesLabel?: string }) {
+  return <div style={{ height }} className="w-full min-w-0"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}><defs><linearGradient id="collectionArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#61bb46" stopOpacity={0.23}/><stop offset="95%" stopColor="#61bb46" stopOpacity={0.015}/></linearGradient></defs><CartesianGrid stroke="#e9efe7" strokeDasharray="4 5" vertical={false}/><XAxis dataKey="label" tick={{ fill: "#718073", fontSize: 12 }} tickLine={false} axisLine={false} minTickGap={18}/><YAxis tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} tick={{ fill: "#718073", fontSize: 12 }} tickLine={false} axisLine={false} width={54}/><Tooltip formatter={(value) => [pkr(value), seriesLabel]} labelStyle={{ color: "#192d21", fontWeight: 700 }} contentStyle={{ border: "1px solid #dce8dc", borderRadius: 12, fontSize: 13 }}/><Area type="monotone" dataKey="collections" stroke="#276431" strokeWidth={3} fill="url(#collectionArea)" activeDot={{ r: 5, strokeWidth: 2, fill: "#fff", stroke: "#276431" }}/></AreaChart></ResponsiveContainer></div>;
 }
 
 type BreakdownBarChartProps = ChartProps & {

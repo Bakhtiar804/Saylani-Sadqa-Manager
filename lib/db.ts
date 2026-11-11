@@ -1,6 +1,10 @@
 import "server-only";
 
-import { Pool, type PoolConfig } from "pg";
+import { Pool, types, type PoolConfig } from "pg";
+
+// DATE is a calendar day, not a local-midnight timestamp. Preserve it verbatim
+// so a Karachi date cannot turn into the previous UTC day in dashboard records.
+types.setTypeParser(1082,value=>value);
 
 declare global {
   var saylaniDatabasePool: Pool | undefined;
@@ -76,6 +80,8 @@ export function getDatabasePool(): Pool {
     max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
+    statement_timeout: 15_000,
+    query_timeout: 20_000,
     application_name: "saylani-sadqa-manager",
   });
 

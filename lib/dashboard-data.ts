@@ -246,13 +246,10 @@ export async function getImportedCityReportSummary(cityName: string): Promise<Im
   const join = available.has("reporting_cities")
     ? "LEFT JOIN reporting_cities city ON city.city_id = report.city_id"
     : "";
-  const normalizedCity = (expression: string) => `LOWER(regexp_replace(COALESCE(${expression}, ''), '[^a-z0-9]', '', 'g'))`;
+  const normalizedCity = (expression: string) => `regexp_replace(LOWER(COALESCE(${expression}, '')), '[^a-z0-9]', '', 'g')`;
   const cityFilterFor = (reportAlias: string, cityAlias: string) => available.has("reporting_cities")
     ? `(${normalizedCity(`${cityAlias}.city_name`)} = ${normalizedCity("$1")} OR ${normalizedCity(`${cityAlias}.normalized_city_name`)} = ${normalizedCity("$1")} OR ${normalizedCity(`${reportAlias}.source_city_name`)} = ${normalizedCity("$1")})`
     : `${normalizedCity(`${reportAlias}.source_city_name`)} = ${normalizedCity("$1")}`;
-  const cityNameExpression = available.has("reporting_cities")
-    ? "COALESCE(city.city_name, report.source_city_name, 'Unassigned')"
-    : "COALESCE(report.source_city_name, 'Unassigned')";
   const cityWhere = cityFilterFor("report", "city");
   const latestCityWhere = cityFilterFor("latest", "latest_city");
   const query = <T extends Record<string, unknown>>(table: string, sql: string): Promise<{ rows: T[] }> => available.has(table)
@@ -326,7 +323,7 @@ export async function getImportedReportSummary() {
     reportingCities] = await Promise.all([
     queryIfAvailable<{ records: number; amount_pkr: string | number; box_count: number; first_month: string | null; latest_month: string | null }>("monthly_collection_reports", `SELECT COUNT(*)::int AS records,
       COALESCE(SUM(amount_pkr), 0) AS amount_pkr,
-      COALESCE(SUM(box_count), 0)::int AS box_count,
+      COALESCE(SUM(box_count) FILTER (WHERE report_month = (SELECT MAX(report_month) FROM monthly_collection_reports)), 0)::int AS box_count,
       MIN(report_month)::text AS first_month, MAX(report_month)::text AS latest_month
       FROM monthly_collection_reports`),
     queryIfAvailable<{ month: string; amount_pkr: string | number; records: number }>("monthly_collection_reports", `SELECT TO_CHAR(report_month, 'YYYY-MM') AS month,
@@ -360,7 +357,7 @@ export async function getImportedReportSummary() {
       ${cityJoin}
       WHERE report.report_month = (SELECT MAX(report_month) FROM monthly_staff_counts)
       GROUP BY 1 ORDER BY value DESC LIMIT 10`),
-    queryIfAvailable<{ count: number }>("reporting_cities", `SELECT COUNT(*)::int AS count FROM reporting_cities`),
+    queryIfAvailable<{ count: number }>("monthly_collection_reports", `SELECT COUNT(DISTINCT city_id)::int AS count FROM monthly_collection_reports`),
   ]);
 
   const mapBreakdown = (rows: Array<{ name: string; value: string | number; records?: number }>): ReportBreakdown[] =>
@@ -371,9 +368,9 @@ export async function getImportedReportSummary() {
       label: new Date(`${row.month}-01T00:00:00Z`).toLocaleDateString("en-PK", { month: "short", year: "2-digit", timeZone: "UTC" }),
       value: Number(row.amount_pkr) || 0,
     }));
-  const collection = collectionSummary.rows[0];
-  const expense = expenseSummary.rows[0];
-  const staff = staffSummary.rows[0];
+  const collection = collectionSummary.rows[0] ?? {};
+  const expense = expenseSummary.rows[0] ?? {};
+  const staff = staffSummary.rows[0] ?? {};
   return {
     collections: {
       records: Number(collection.records) || 0,
@@ -442,6 +439,8 @@ export async function getCollectionExplorerPage(options: CollectionExplorerOptio
     city_id: "city.city_name",
     collection_amount_pkr: "collection.collection_amount_pkr",
     collection_status: "collection.collection_status",
+    rider_name: "rider_user.full_name",
+    box_id: "collection.box_id",
   };
   const sortSql = sortColumns[options.sort ?? ""] ?? "collection.collection_date";
   const directionSql = options.direction === "asc" ? "ASC" : "DESC";
@@ -497,6 +496,8 @@ export async function getFieldCollectionExplorerPage(options: CollectionExplorer
     city_id: "city.city_name",
     total_cash_counted_pkr: "field.total_cash_counted_pkr",
     collection_status: "field.collection_status",
+    rider_name: "rider_user.full_name",
+    box_id: "field.box_id",
   };
   const sortSql = sortColumns[options.sort ?? ""] ?? "field.collection_date";
   const directionSql = options.direction === "asc" ? "ASC" : "DESC";

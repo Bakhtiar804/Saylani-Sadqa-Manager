@@ -25,7 +25,7 @@ export default function Topbar({ userRole }: { userRole: string }) {
       </div>
       <div className="flex items-center gap-3 max-[600px]:gap-2">
         <span className="rounded-full border border-[#dce8dc] bg-[#f5faf2] px-3 py-1.5 text-xs font-semibold text-[#276431] max-[600px]:hidden">
-          DEMO DATA
+          MONTHLY REPORTS
         </span>
         <span className="hidden text-xs text-[#718073] sm:inline max-[600px]:hidden">
           Saylani Sadqa Manager

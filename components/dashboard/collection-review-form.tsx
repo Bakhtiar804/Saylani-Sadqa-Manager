@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchResponse } from '@/lib/client-request';
+
 import { useEffect, useState, type FormEvent } from "react";
 
 type AuditEvent = {
@@ -26,7 +28,7 @@ export default function CollectionReviewForm({ collectionId, status, onReviewed 
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/dashboard/collections/${encodeURIComponent(collectionId)}/verification`, {
+    fetchResponse(`/api/dashboard/collections/${encodeURIComponent(collectionId)}/verification`, {
       signal: controller.signal, cache: "no-store",
     }).then(async (response) => {
       const result = await response.json() as { events?: AuditEvent[]; error?: string };
@@ -43,14 +45,14 @@ export default function CollectionReviewForm({ collectionId, status, onReviewed 
     setError("");
     setBusy(true);
     try {
-      const response = await fetch(`/api/dashboard/collections/${encodeURIComponent(collectionId)}/verification`, {
+      const response = await fetchResponse(`/api/dashboard/collections/${encodeURIComponent(collectionId)}/verification`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: decision, notes }),
       });
       const result = await response.json() as { status?: string; error?: string };
       if (!response.ok || !result.status) throw new Error(result.error || "Could not save the review.");
       onReviewed(result.status);
       setNotes("");
-      const historyResponse = await fetch(`/api/dashboard/collections/${encodeURIComponent(collectionId)}/verification`, { cache: "no-store" });
+      const historyResponse = await fetchResponse(`/api/dashboard/collections/${encodeURIComponent(collectionId)}/verification`, { cache: "no-store" });
       const historyResult = await historyResponse.json() as { events?: AuditEvent[] };
       if (historyResponse.ok && historyResult.events) setEvents(historyResult.events);
     } catch (submitError) {
@@ -60,11 +62,11 @@ export default function CollectionReviewForm({ collectionId, status, onReviewed 
 
   return <div className="mt-5 space-y-4">
     <form onSubmit={submit} className="grid gap-3 rounded-xl border border-[#dce8dc] bg-white p-4 sm:grid-cols-[180px_minmax(0,1fr)_auto] sm:items-end">
-      <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Review decision<select value={decision} onChange={(event) => setDecision(event.target.value)} disabled={busy || isLocked} className="h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#203526]"><option value="Verified">Verify</option><option value="Flagged">Flag for review</option></select></label>
+      <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Review decision<select value={decision} onChange={(event) => setDecision(event.target.value)} disabled={busy || isLocked} className="h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#203526]"><option value="Verified">Mark recorded</option><option value="Flagged">Flag for review</option></select></label>
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Review note{decision === "Flagged" ? " (required)" : " (optional)"}<input value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={1000} disabled={busy || isLocked} placeholder="Add context for the audit record" className="h-10 rounded-lg border border-[#dce8dc] px-3 text-sm font-normal text-[#203526]"/></label>
-      <button type="submit" disabled={busy || isLocked} className="h-10 rounded-lg bg-[#276431] px-4 text-sm font-semibold text-white hover:bg-[#1f5129] disabled:cursor-not-allowed disabled:opacity-50">{isLocked ? "Verified" : busy ? "Saving…" : "Save review"}</button>
+      <button type="submit" disabled={busy || isLocked} className="h-10 rounded-lg bg-[#276431] px-4 text-sm font-semibold text-white hover:bg-[#1f5129] disabled:cursor-not-allowed disabled:opacity-50">{isLocked ? "Recorded" : busy ? "Saving…" : "Save review"}</button>
       {error && <p role="alert" className="text-sm text-[#913a34] sm:col-span-3">{error}</p>}
-      {isLocked && <p className="text-xs text-[#657568] sm:col-span-3">Verified records are locked. Use the correction workflow to amend one.</p>}
+      {isLocked && <p className="text-xs text-[#657568] sm:col-span-3">Recorded entries are locked to preserve audit history.</p>}
     </form>
     <section className="rounded-xl border border-[#e3ebe0] bg-white p-4" aria-label="Collection audit history">
       <h3 className="text-sm font-bold text-[#203526]">Audit history</h3>

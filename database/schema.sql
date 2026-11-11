@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS donation_boxes (
   qr_code VARCHAR(40) NOT NULL UNIQUE,
   city_id VARCHAR(16) NOT NULL REFERENCES cities(city_id),
   area VARCHAR(100) NOT NULL,
+  district VARCHAR(100),
   location_type VARCHAR(40) NOT NULL,
   location_description TEXT NOT NULL,
   custodian_user_id VARCHAR(40) REFERENCES users(user_id),

@@ -1,11 +1,15 @@
 "use client";
 
+import { fetchResponse } from '@/lib/client-request';
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Dispatch, SetStateAction } from "react";
 import type { CityOption, DataRecord, RecordColumn, RecordValue } from "@/lib/dashboard-types";
 import CollectionReviewForm from "@/components/dashboard/collection-review-form";
+import BoxDistrictControl from './box-district-control';
 import BoxStatusControl from "@/components/dashboard/box-status-control";
+import { recordDateWithinRange } from '@/lib/record-values';
 
 function prettyLabel(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -14,7 +18,7 @@ function prettyLabel(value: string): string {
 function displayValue(value: RecordValue, key: string, cityById: Map<string, string>): string {
   if (value === null || value === undefined || value === "") return "—";
   if (key === "city_id") return cityById.get(String(value)) || String(value);
-  if (key.endsWith("_pkr")) return `Rs ${Number(value).toLocaleString("en-PK")}`;
+  if (key.endsWith("_pkr")) return `Rs ${Number(value).toLocaleString("en-PK", { maximumFractionDigits: 2 })}`;
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
 }
@@ -29,6 +33,7 @@ type RecordExplorerProps = {
   dateKey?: string;
   cities?: CityOption[];
   initialSortDirection?: "asc" | "desc";
+  initialSortKey?: string;
   totalRecords?: number;
   remoteEndpoint?: string;
   remoteStatuses?: string[];
@@ -36,14 +41,28 @@ type RecordExplorerProps = {
   allowBoxStatusChange?: boolean;
 };
 
-export default function RecordExplorer({ title, description, records, columns, statusKey = "", cityKey = "city_id", dateKey = "", cities = [], initialSortDirection = "desc", totalRecords, remoteEndpoint, remoteStatuses = [], allowCollectionReview = false, allowBoxStatusChange = false }: RecordExplorerProps) {
+export default function RecordExplorer(props: RecordExplorerProps) {
+  // A new register/sort configuration needs fresh interaction state, including
+  // during Fast Refresh. Keep the server and the first client render identical.
+  const configurationKey = JSON.stringify([
+    props.title, props.remoteEndpoint, props.initialSortKey,
+    props.dateKey, props.initialSortDirection, props.columns.map((column) => column.key),
+  ]);
+  return <RecordExplorerContent key={configurationKey} {...props} />;
+}
+
+function RecordExplorerContent({ title, description, records, columns, statusKey = "", cityKey = "city_id", dateKey = "", cities = [], initialSortDirection = "desc", initialSortKey, totalRecords, remoteEndpoint, remoteStatuses = [], allowCollectionReview = false, allowBoxStatusChange = false }: RecordExplorerProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [city, setCity] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [sort, setSort] = useState<{ key: string; direction: "asc" | "desc" }>({ key: dateKey || columns[0]?.key || "", direction: initialSortDirection });
+  const [sortOverride, setSort] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
+  const sort = useMemo(() => sortOverride ?? {
+    key: initialSortKey || dateKey || columns[0]?.key || "",
+    direction: initialSortDirection,
+  }, [sortOverride, initialSortKey, dateKey, columns, initialSortDirection]);
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState("");
   const [remoteRecords, setRemoteRecords] = useState(records);
@@ -62,15 +81,13 @@ export default function RecordExplorer({ title, description, records, columns, s
       const matchesQuery = !needle || Object.entries(record).some(([key, value]) => key !== "is_demo_record" && String(value ?? "").toLowerCase().includes(needle));
       const matchesStatus = status === "all" || String(record[statusKey]) === status;
       const matchesCity = city === "all" || String(record[cityKey]) === city;
-      const recordDate = String(record[dateKey] ?? "");
-      const matchesFrom = !from || !recordDate || recordDate >= from;
-      const matchesTo = !to || !recordDate || recordDate <= to;
-      return matchesQuery && matchesStatus && matchesCity && matchesFrom && matchesTo;
+      const matchesDate = recordDateWithinRange(record[dateKey],from,to);
+      return matchesQuery && matchesStatus && matchesCity && matchesDate;
     }).sort((a, b) => {
       if (!sort.key) return 0;
       const left = a[sort.key] ?? "";
       const right = b[sort.key] ?? "";
-      const result = typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: "base" });
+      const result = typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right), "en-PK", { numeric: true, sensitivity: "base" });
       return sort.direction === "asc" ? result : -result;
     });
   }, [activeRecords, query, status, city, from, to, statusKey, cityKey, dateKey, sort, remoteEndpoint]);
@@ -107,11 +124,13 @@ export default function RecordExplorer({ title, description, records, columns, s
           sort: sort.key,
           direction: sort.direction,
         });
-        const response = await fetch(`${remoteEndpoint}?${params}`, { signal: controller.signal, cache: "no-store" });
+        const response = await fetchResponse(`${remoteEndpoint}?${params}`, { signal: controller.signal, cache: "no-store" });
         const result: { records?: DataRecord[]; totalRecords?: number; error?: string } = await response.json();
         if (!response.ok || !result.records) throw new Error(result.error || "Could not load these records.");
         setRemoteRecords(result.records);
         setRemoteTotal(Number(result.totalRecords) || 0);
+        const lastPage=Math.max(1,Math.ceil((Number(result.totalRecords)||0)/pageSize));
+        if(page>lastPage) setPage(lastPage);
       } catch (error) {
         if (!controller.signal.aborted) setRemoteError(error instanceof Error ? error.message : "Could not load these records.");
       } finally {
@@ -122,10 +141,10 @@ export default function RecordExplorer({ title, description, records, columns, s
       clearTimeout(timer);
       controller.abort();
     };
-  }, [remoteEndpoint, page, query, status, city, from, to, sort]);
+  }, [remoteEndpoint, page, query, status, city, from, to, sort, records, totalRecords]);
 
   function toggleSort(key: string) {
-    setSort((previous) => ({ key, direction: previous.key === key && previous.direction === "asc" ? "desc" : "asc" }));
+    setSort({ key, direction: sort.key === key && sort.direction === "asc" ? "desc" : "asc" });
     setPage(1);
   }
 
@@ -160,6 +179,6 @@ type FragmentRowProps = {
 function FragmentRow({ record, isOpen, columns, onToggle, cityById, allowCollectionReview = false, allowBoxStatusChange = false, onCollectionReviewed }: FragmentRowProps) {
   return <>
     <tr className="border-b border-[#edf1eb] align-middle text-[13px] text-[#405345] transition hover:bg-[#fbfdf9]">{columns.map((column) => <td key={column.key} className="max-w-[260px] px-4 py-3.5"><span className="block overflow-hidden text-ellipsis whitespace-nowrap" title={String(record[column.key] ?? "—")}>{displayValue(record[column.key], column.key, cityById)}</span></td>)}<td className="px-4 py-3.5"><button aria-expanded={isOpen} onClick={onToggle} className="rounded-lg border border-[#dce8dc] px-3 py-2 text-xs font-semibold text-[#276431] transition hover:bg-[#edf6e9] focus-visible:outline-2 focus-visible:outline-[#61bb46]">{isOpen ? "Hide" : "Details"}</button></td></tr>
-    {isOpen && <tr className="border-b border-[#edf1eb] bg-[#f8fbf6]"><td colSpan={columns.length + 1} className="px-5 py-4"><div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">{Object.entries(record).filter(([key]) => !/password/i.test(key)).map(([key, value]) => <div key={key} className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wide text-[#718073]">{prettyLabel(key)}</p><p className="mt-1 break-words text-[13px] text-[#344639]">{displayValue(value, key, cityById)}</p></div>)}</div>{allowCollectionReview && typeof record.collection_id === "string" && <CollectionReviewForm collectionId={record.collection_id} status={String(record.collection_status ?? "")} onReviewed={onCollectionReviewed}/>}{allowBoxStatusChange && typeof record.box_id === "string" && <BoxStatusControl boxId={record.box_id} currentStatus={String(record.box_status ?? "")}/>}</td></tr>}
+    {isOpen && <tr className="border-b border-[#edf1eb] bg-[#f8fbf6]"><td colSpan={columns.length + 1} className="px-5 py-4"><div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">{Object.entries(record).filter(([key]) => !/password|verif|^collection_status$/i.test(key)).map(([key, value]) => <div key={key} className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wide text-[#718073]">{prettyLabel(key)}</p><p className="mt-1 break-words text-[13px] text-[#344639]">{displayValue(value, key, cityById)}</p></div>)}</div>{allowCollectionReview && typeof record.collection_id === "string" && <CollectionReviewForm collectionId={record.collection_id} status={String(record.collection_status ?? "")} onReviewed={onCollectionReviewed}/>}{allowBoxStatusChange && typeof record.box_id === "string" && <><BoxStatusControl boxId={record.box_id} currentStatus={String(record.box_status ?? "")}/><BoxDistrictControl key={`${record.box_id}:${record.district}`} boxId={record.box_id} currentDistrict={String(record.district ?? "")}/></>}</td></tr>}
   </>;
 }

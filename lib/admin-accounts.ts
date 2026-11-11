@@ -6,6 +6,7 @@ import { getDatabasePool } from "@/lib/db";
 import type { AppRole } from "@/lib/session";
 import type { UserSession } from "@/lib/session";
 import type { QueryResultRow } from "pg";
+import { deletableRoles } from './permissions';
 
 export type TeamRole = "admin" | "city_manager" | "rider";
 export type TeamAccount = {
@@ -74,12 +75,12 @@ export async function softDeleteTeamAccount(input: {
   actor: UserSession;
 }): Promise<void> {
   const deleteRoles: Partial<Record<AppRole, readonly TeamRole[]>> = {
-    super_admin: ["admin", "city_manager", "rider"],
+    super_admin: [],
     admin: ["city_manager", "rider"],
     city_manager: ["rider"],
   };
   const allowedTargets = deleteRoles[input.actor.role];
-  if (!allowedTargets) throw new TeamAccountDeleteError("You cannot delete team accounts.", 403);
+  if (!allowedTargets?.length || !deletableRoles[input.actor.role].length) throw new TeamAccountDeleteError("You cannot delete team accounts.", 403);
 
   if (input.userId === input.actor.userId) {
     throw new TeamAccountDeleteError("You cannot delete your own account.", 403);
@@ -144,6 +145,15 @@ export async function isActiveLoginAccount(userId: string): Promise<boolean> {
     LIMIT 1
   `, [userId]);
   return result.rowCount === 1;
+}
+
+export async function isCurrentLoginSession(session: UserSession): Promise<boolean> {
+  const result=await getDatabasePool().query<{role_key:string;city_id:string|null}>(`
+    SELECT role.role_key,account.city_id FROM users account JOIN roles role USING(role_id)
+    WHERE account.user_id=$1 AND account.identity_type='login_account'
+      AND account.account_status='active' AND account.deleted_at IS NULL LIMIT 1`,[session.userId]);
+  const account=result.rows[0];
+  return Boolean(account && normalizeLoginRole(account.role_key)===session.role && account.city_id===session.cityId);
 }
 export async function createTeamAccount(input: {
   name: string; email: string; phone: string; passwordHash: string; role: TeamRole;

@@ -1,11 +1,17 @@
 import { Card } from "@/components/ui/card";
 
+// Public illustration only; authenticated reports contain the actual workbook data.
 const collections = [
-  { city: "Karachi", amount: 320000, boxes: 640 },
-  { city: "Faisalabad", amount: 480000, boxes: 800 },
+  { city: "Karachi", amount: 480000, boxes: 800 },
+  { city: "Faisalabad", amount: 420000, boxes: 700 },
+  { city: "Lahore", amount: 310000, boxes: 620 },
+  { city: "Hyderabad", amount: 265000, boxes: 530 },
+  { city: "Islamabad", amount: 185000, boxes: 370 },
+  { city: "Multan", amount: 140000, boxes: 280 },
 ];
 
 const scale = 500000;
+const barCells = 40;
 const formatAmount = new Intl.NumberFormat("en-PK");
 const totalCollected = collections.reduce((total, city) => total + city.amount, 0);
 const totalBoxes = collections.reduce((total, city) => total + city.boxes, 0);
@@ -21,7 +27,7 @@ export function AnalyticsPreview() {
       <div>
         <p className="text-xs font-bold tracking-[0.18em] text-accent-strong uppercase">Analytics preview</p>
         <h2 id="analytics-title" className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Monthly collection snapshot</h2>
-        <p className="mt-4 max-w-2xl text-muted-foreground">Start with the combined totals for Karachi and Faisalabad, then see how much each city contributed over the same reporting period.</p>
+        <p className="mt-3 max-w-2xl text-sm text-muted-foreground">Six-city illustration. Sign in for actual source reports.</p>
         <p id="metrics-note" className="mt-5 inline-block rounded-full bg-accent/20 px-3 py-1 text-xs font-semibold">Illustrative data · Monthly reporting period</p>
       </div>
       <dl aria-describedby="metrics-note" className="mt-4 grid gap-3 md:grid-cols-3">
@@ -46,8 +52,11 @@ export function AnalyticsPreview() {
                   <span>{city}</span>
                   <span className="tabular-nums">PKR {formatAmount.format(amount)}</span>
                 </div>
-                <div aria-hidden="true" className="h-3 overflow-hidden rounded-full bg-surface">
-                  <div className="h-full rounded-full bg-accent-strong" style={{ width: `${amount / scale * 100}%` }} />
+                <div aria-hidden="true" data-cell-bar={city} className="grid h-5 gap-[3px] sm:h-6 sm:gap-1" style={{ gridTemplateColumns: `repeat(${barCells}, minmax(0, 1fr))` }}>
+                  {Array.from({length:barCells},(_,index)=>{
+                    const fill=Math.max(0,Math.min(1,amount/scale*barCells-index))*100;
+                    return <span key={index} className="rounded-[3px] bg-surface" style={{background:fill>0?`linear-gradient(to right, var(--accent-strong) ${fill}%, var(--surface) ${fill}%)`:undefined}}/>;
+                  })}
                 </div>
               </li>
             ))}

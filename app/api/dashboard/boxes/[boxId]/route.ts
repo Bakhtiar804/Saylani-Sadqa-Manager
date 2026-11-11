@@ -1,3 +1,4 @@
+import { withApiErrors } from '@/lib/api-errors';
 import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
@@ -5,10 +6,10 @@ import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-au
 
 const boxStatuses = ["Active", "Inactive", "Damaged", "Under Review"] as const;
 
-export async function PATCH(request: Request, context: { params: Promise<{ boxId: string }> }) {
+async function handlePATCH(request: Request, context: { params: Promise<{ boxId: string }> }) {
   const session = await getOperationsSession();
   if (!session) return Response.json({ error: "Sign in to update a box." }, { status: 401 });
-  if (!["super_admin", "admin", "city_manager"].includes(session.role)) return Response.json({ error: "Box status management access is required." }, { status: 403 });
+  if (!["admin", "city_manager"].includes(session.role)) return Response.json({ error: "Your role has read-only access to boxes." }, { status: 403 });
   if (session.role !== "super_admin" && !session.cityId) return Response.json({ error: "A city assignment is required." }, { status: 403 });
   if (!hasValidRequestOrigin(request)) return Response.json({ error: "Invalid request origin." }, { status: 403 });
 
@@ -55,3 +56,5 @@ export async function PATCH(request: Request, context: { params: Promise<{ boxId
     return Response.json({ error: "The box status could not be updated." }, { status: 503 });
   } finally { client.release(); }
 }
+
+export const PATCH = withApiErrors(handlePATCH);

@@ -8,23 +8,32 @@
     "start": "next start",
     "lint": "eslint",
     "reset:super-admin-password": "jiti scripts/reset-super-admin-password.mts",
-    "test:smoke": "jiti scripts/smoke-test.mts"
+    "test:smoke": "jiti scripts/smoke-test.mts",
+    "import:reports": "node scripts/import-monthly-reports.mjs",
+    "test:reports": "jiti scripts/verify-monthly-reports.mts",
+    "test:hydration": "node scripts/test-record-explorer-hydration.mjs",
+    "test:visual": "node scripts/test-visual-layout.mjs",
+    "test:ranking": "node scripts/test-ranking-filters.mjs",
+    "test:leaderboard": "node scripts/test-leaderboard-refresh.mjs",
+    "test:meeting": "node --conditions=react-server --import jiti/register scripts/run-meeting-tests.mts",
+    "test:flow": "node --conditions=react-server --import jiti/register scripts/run-project-flow.mts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.5.0",
     "@tailwindcss/postcss": "^4.3.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
     "jiti": "^2.7.0",
     "next": "16.4.5",
     "pg": "^8.23.1",
     "postcss": "^8.5.32",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "server-only": "^0.0.1",
-    "tailwind-merge": "^3.7.0",
     "react-is": "^19.3.0",
-    "recharts": "^3.10.1"
+    "recharts": "^3.10.1",
+    "server-only": "^0.0.1",
+    "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
@@ -34,6 +43,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
+    "jsdom": "^31.0.0",
     "tailwindcss": "^4.3.5",
     "typescript": "^5"
   }

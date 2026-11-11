@@ -1,3 +1,4 @@
+import { withApiErrors } from '@/lib/api-errors';
 import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
@@ -5,7 +6,7 @@ import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-au
 
 const decisions = ["Verified", "Flagged"] as const;
 
-export async function GET(_request: Request, context: { params: Promise<{ collectionId: string }> }) {
+async function handleGET(_request: Request, context: { params: Promise<{ collectionId: string }> }) {
   const session = await getOperationsSession();
   if (!session) return Response.json({ error: "Sign in to view collection history." }, { status: 401 });
   if (!["super_admin", "admin", "city_manager"].includes(session.role)) return Response.json({ error: "Collection review access is required." }, { status: 403 });
@@ -39,10 +40,10 @@ export async function GET(_request: Request, context: { params: Promise<{ collec
   }
 }
 
-export async function PATCH(request: Request, context: { params: Promise<{ collectionId: string }> }) {
+async function handlePATCH(request: Request, context: { params: Promise<{ collectionId: string }> }) {
   const session = await getOperationsSession();
   if (!session) return Response.json({ error: "Sign in to review collections." }, { status: 401 });
-  if (!["super_admin", "admin", "city_manager"].includes(session.role)) return Response.json({ error: "Collection review access is required." }, { status: 403 });
+  if (!["admin", "city_manager"].includes(session.role)) return Response.json({ error: "Your role has read-only access to collections." }, { status: 403 });
   if (session.role !== "super_admin" && !session.cityId) return Response.json({ error: "A city assignment is required." }, { status: 403 });
   if (!hasValidRequestOrigin(request)) return Response.json({ error: "Invalid request origin." }, { status: 403 });
 
@@ -50,7 +51,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ colle
   let body: unknown;
   try { body = await request.json(); } catch { return Response.json({ error: "Choose a review decision." }, { status: 400 }); }
   if (typeof body !== "object" || body === null || !("status" in body) || !decisions.includes(body.status as typeof decisions[number])) {
-    return Response.json({ error: "Choose Verified or Flagged." }, { status: 400 });
+    return Response.json({ error: "Choose Mark recorded or Flag for review." }, { status: 400 });
   }
   const notes = "notes" in body && typeof body.notes === "string" ? body.notes.trim().slice(0, 1000) : "";
   if (body.status === "Flagged" && notes.length < 3) return Response.json({ error: "Add a short reason when flagging a collection." }, { status: 400 });
@@ -68,14 +69,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ colle
     }
     if (current.collection_status === "Verified") {
       await client.query("ROLLBACK");
-      return Response.json({ error: "Verified records are locked. Use the correction workflow to amend one." }, { status: 409 });
+      return Response.json({ error: "Recorded entries are locked to preserve audit history." }, { status: 409 });
     }
 
     const status = body.status as typeof decisions[number];
     await client.query(`
       UPDATE collections
-      SET collection_status = $2, verified_by_user_id = $3, verified_at = CURRENT_TIMESTAMP,
-          notes = CASE WHEN $4 = '' THEN notes ELSE CONCAT_WS(E'\\n', notes, 'Review [' || $2 || ']: ' || $4) END
+      SET collection_status = $2::text, verified_by_user_id = $3, verified_at = CURRENT_TIMESTAMP,
+          notes = CASE WHEN $4::text = '' THEN notes ELSE CONCAT_WS(CHR(10), notes, 'Review [' || CASE WHEN $2::text = 'Verified' THEN 'Recorded' ELSE 'Flagged' END || ']: ' || $4::text) END
       WHERE collection_id = $1
     `, [collectionId, status, session.userId, notes]);
     await client.query(`
@@ -91,3 +92,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ colle
     return Response.json({ error: "The collection could not be reviewed." }, { status: 503 });
   } finally { client.release(); }
 }
+
+export const GET = withApiErrors(handleGET);
+export const PATCH = withApiErrors(handlePATCH);
