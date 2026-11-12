@@ -25,6 +25,31 @@ function formatPKR(value: unknown) {
   return `PKR ${Math.round(amount).toLocaleString("en-PK")}`;
 }
 
+function ChartVisual({ output }: { output: unknown }) {
+  if (!output || typeof output !== "object") return null;
+  const chart = output as { kind?: string; chartType?: string; title?: string; xLabel?: string; yLabel?: string; label?: string; unit?: string; data?: Array<Record<string, unknown>>; source?: string | { name?: string }; period?: string };
+  if (chart.kind !== "chart" || !chart.data?.length) return null;
+  const data = chart.data.map((row) => ({ name: String(row.name ?? row.month ?? ""), value: Number(row.value ?? 0), public: Number(row.public ?? 0), branch: Number(row.branch ?? 0) }));
+  return <section className="mt-4 min-w-0 overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[0_8px_24px_rgba(25,45,33,.04)]"><p className="text-xs font-bold text-[#36513d]">{chart.title || "Analytics chart"}</p><p className="mb-2 text-[10px] text-[var(--muted-foreground)]">{chart.yLabel || chart.label || chart.unit || "Value"}{chart.xLabel ? ` by ${chart.xLabel.toLowerCase()}` : ""}{chart.period ? ` · ${chart.period}` : ""}</p>{chart.chartType === "line" && <CollectionTrendChart data={data.map((row) => ({ label: row.name, collections: row.value }))} height={220} seriesLabel={chart.yLabel || chart.unit || "Value"} />}{chart.chartType === "channel_line" && <ChannelComparisonChart data={data.map((row) => ({ month: row.name, public: row.public, branch: row.branch }))} />}{chart.chartType === "bar" && <BreakdownBarChart data={data} valueFormat={chart.unit === "PKR" ? "currency" : "number"} horizontal height={Math.max(220, data.length * 42)} />}{chart.chartType === "donut" && <MoneyDonutChart data={data} centerLabel={chart.label || chart.unit || "Records"} />}{(chart.source || chart.period) && <p className="mt-2 text-[10px] text-[var(--muted-foreground)]">{chart.period ? `Period: ${chart.period}` : ""}{chart.source ? ` · Source: ${typeof chart.source === "string" ? chart.source : chart.source.name || "permitted records"}` : ""}</p>}</section>;
+}
+
+function TableVisual({ output }: { output: unknown }) {
+  if (!output || typeof output !== "object") return null;
+  const table = output as { kind?: string; title?: string; columns?: string[]; rows?: unknown[][]; total?: number; source?: string; scope?: string };
+  if (table.kind !== "table" || !table.columns || !table.rows) return null;
+  const columns = table.columns;
+  const rows = table.rows;
+  return <section className="mt-4 min-w-0 overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[0_8px_24px_rgba(25,45,33,.04)]"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold text-[#36513d]">{table.title || "Records"}</p><span className="text-[10px] text-[var(--muted-foreground)]">{table.total ?? rows.length} records</span></div><div className="max-h-80 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--card)]"><table className="min-w-full text-left text-[11px]"><thead className="sticky top-0 bg-[var(--surface)] text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]"><tr>{columns.map((column) => <th key={column} className="whitespace-nowrap border-b border-[var(--border)] px-3 py-2 font-bold">{column}</th>)}</tr></thead><tbody>{rows.map((row, rowIndex) => <tr key={rowIndex} className="border-b border-[var(--border)] last:border-0">{columns.map((column, columnIndex) => <td key={`${rowIndex}-${column}`} className="max-w-56 px-3 py-2 align-top text-[var(--foreground)]">{column.toLowerCase().includes("pkr") || column.toLowerCase().includes("amount") || column.toLowerCase().includes("cost") || column.toLowerCase().includes("difference") ? formatPKR(row[columnIndex]) : String(row[columnIndex] ?? "—")}</td>)}</tr>)}</tbody></table></div>{(table.scope || table.source) && <p className="mt-2 text-[10px] text-[var(--muted-foreground)]">{table.scope || "Permitted scope"}{table.source ? ` · Source: ${table.source}` : ""}</p>}</section>;
+}
+
+function OutputVisual({ output }: { output: unknown }) {
+  if (!output || typeof output !== "object") return null;
+  const kind = (output as { kind?: string }).kind;
+  if (kind === "chart") return <ChartVisual output={output} />;
+  if (kind === "table") return <TableVisual output={output} />;
+  return <SummaryVisual output={output} />;
+}
+
 function SummaryVisual({ output }: { output: unknown }) {
   if (!output || typeof output !== "object") return null;
   const value = output as { kind?: string; title?: string; period?: string; source?: { name?: string } | string | null; totals?: Record<string, unknown>; monthly?: Array<Record<string, unknown>>; byCity?: Array<{ name: string; value: number | null }>; categories?: Array<{ name: string; value: number | null }>; visuals?: { trend?: { title?: string; xLabel?: string; yLabel?: string } | null; channels?: { title?: string; xLabel?: string; yLabel?: string } | null; cities?: { title?: string; xLabel?: string; yLabel?: string } | null; expenses?: { title?: string; label?: string } | null } };
@@ -62,7 +87,7 @@ function MessageContent({ message }: { message: UIMessage }) {
     .map((part) => part as ChatPart)
     .filter((part) => part.type?.startsWith("tool-") && part.output)
     .map((part) => part.output);
-  return <>{message.parts.filter((part) => part.type === "text").map((part, index) => <div key={index} className="space-y-3 leading-6 [&_a]:font-semibold [&_a]:text-[var(--primary)] [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--accent)] [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-[var(--surface)] [&_code]:px-1 [&_code]:py-0.5 [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-bold [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:whitespace-pre-wrap [&_strong]:font-extrabold [&_table]:w-full [&_td]:border [&_td]:border-[var(--border)] [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-[var(--border)] [&_th]:bg-[var(--surface)] [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_ul]:pl-4">{"text" in part ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown> : null}</div>)}{outputs.map((output, index) => <SummaryVisual key={index} output={output} />)}</>;
+  return <>{message.parts.filter((part) => part.type === "text").map((part, index) => <div key={index} className="space-y-3 leading-6 [&_a]:font-semibold [&_a]:text-[var(--primary)] [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--accent)] [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-[var(--surface)] [&_code]:px-1 [&_code]:py-0.5 [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-bold [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:whitespace-pre-wrap [&_strong]:font-extrabold [&_table]:w-full [&_td]:border [&_td]:border-[var(--border)] [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-[var(--border)] [&_th]:bg-[var(--surface)] [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_ul]:pl-4">{"text" in part ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown> : null}</div>)}{outputs.map((output, index) => <OutputVisual key={index} output={output} />)}</>;
 }
 
 function Conversation({ threadId, initialMessages, onSaved, suggestions, compact = false }: { threadId: string; initialMessages: UIMessage[]; onSaved: () => void; suggestions: string[]; compact?: boolean }) {
