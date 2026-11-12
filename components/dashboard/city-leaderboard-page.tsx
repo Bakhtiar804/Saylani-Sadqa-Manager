@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { connection } from 'next/server';
 import { redirect } from 'next/navigation';
 import { getOperationsSession } from '@/lib/operations-auth';
@@ -8,7 +9,10 @@ import PageHeading from './page-heading';
 import RankingBoard from './ranking-board';
 import RankingFilters from './ranking-filters';
 import VictoryBar from './victory-bar';
-export default async function CityLeaderboardPage({searchParams}:{searchParams:Promise<MonthlyReportFilters>}) {
+export default function CityLeaderboardPage(props:{searchParams:Promise<MonthlyReportFilters>}) {
+ return <Suspense fallback={<div className="p-6 text-sm text-[#718073]">Loading leaderboard…</div>}><CityLeaderboardContent {...props}/></Suspense>;
+}
+async function CityLeaderboardContent({searchParams}:{searchParams:Promise<MonthlyReportFilters>}) {
  await connection();const session=await getOperationsSession();if(!session) redirect('/sign-in');if(session.role==='rider') redirect('/dashboard/rider');
  const scope={network:session.role==='super_admin',cityId:session.cityId};const options=await getMonthlyReportOptions(scope);const params=await searchParams;
  const cities=(await getCityOptions()).filter(city=>scope.network||city.city_id===session.cityId);
