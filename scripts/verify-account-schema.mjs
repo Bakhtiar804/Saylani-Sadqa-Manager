@@ -19,7 +19,7 @@ try {
   assert.ok(['localhost','127.0.0.1','[::1]'].includes(new URL(base).hostname));
   const payload=Buffer.from(JSON.stringify({userId:account.team_id,email:account.email,name:account.full_name,cityId:account.city_id,role:'super_admin',expiresAt:Math.floor(Date.now()/1000)+300})).toString('base64url');
   const cookie=payload+'.'+createHmac('sha256',process.env.AUTH_SECRET.trim()).update(payload).digest('base64url');
-  for(const [path,title] of [['/dashboard','Donation &amp; Expense Overview'],['/dashboard/boxes','Collection network tree'],['/dashboard/analytics','Collection Analytics'],['/dashboard/admins','Team directory'],['/dashboard/riders','Rider Details'],['/dashboard/inventory','Donation Boxes'],['/dashboard/operations','Inspections &amp; Incidents'],['/dashboard/users','User directory']]) {
+  for(const [path,title] of [['/dashboard','Donation &amp; Expense Overview'],['/dashboard/boxes','Donation box location network'],['/dashboard/analytics','Collection Analytics'],['/dashboard/admins','Team directory'],['/dashboard/riders','Rider Details'],['/dashboard/inventory','Donation Boxes'],['/dashboard/operations','Inspections &amp; Incidents'],['/dashboard/users','User directory']]) {
    const response=await fetch(base+path,{headers:{Cookie:'saylani_admin_session='+cookie},redirect:'manual',signal:AbortSignal.timeout(90000)});
    assert.equal(response.status,200,path);
    const html=await response.text();

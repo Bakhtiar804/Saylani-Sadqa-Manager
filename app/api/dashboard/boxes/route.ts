@@ -5,6 +5,8 @@ import { getDatabasePool } from "@/lib/db";
 import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-auth";
 import { getActiveTeamBranch } from "@/lib/city-branches";
 
+import { parseBoxCoordinates } from '@/lib/box-coordinates';
+
 function textField(body: Record<string, unknown>, key: string, max: number): string {
   return typeof body[key] === "string" ? body[key].trim().slice(0, max) : "";
 }
@@ -20,6 +22,9 @@ async function handlePOST(request: Request) {
   try { input = await request.json(); } catch { return Response.json({ error: "Enter the box details." }, { status: 400 }); }
   if (typeof input !== "object" || input === null) return Response.json({ error: "Enter the box details." }, { status: 400 });
   const body = input as Record<string, unknown>;
+  let coordinates;
+  try { coordinates = parseBoxCoordinates(body); }
+  catch (error) { return Response.json({ error: (error as Error).message }, { status: 400 }); }
   const qrCode = textField(body, "qrCode", 40).toUpperCase();
   const cityId = session.cityId!;
   const branch = session.role === 'city_manager' ? await getActiveTeamBranch(session.userId, cityId) : null;
@@ -95,9 +100,9 @@ async function handlePOST(request: Request) {
       INSERT INTO donation_boxes (
         box_id, qr_code, city_id, area, location_type, location_description,
         custodian_team_id, partner_id, assigned_rider_id, installation_date,
-        box_status, security_level, is_demo_record, district
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Active', $11, FALSE, $12)
-    `, [boxId, qrCode, cityId, area, locationType, locationDescription, custodianUserId, partnerId, assignedRiderId, installationDate, securityLevel, district]);
+        box_status, security_level, is_demo_record, district, latitude, longitude
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Active', $11, FALSE, $12, $13, $14)
+    `, [boxId, qrCode, cityId, area, locationType, locationDescription, custodianUserId, partnerId, assignedRiderId, installationDate, securityLevel, district, coordinates.latitude, coordinates.longitude]);
     if (branch) {
       await client.query(`
         INSERT INTO branch_box_assignments (box_id, city_id, branch_id, assigned_by_team_id)
@@ -111,7 +116,7 @@ async function handlePOST(request: Request) {
     await client.query(`
       INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'donation_box', $2, 'registered', $3, NULL, $4::jsonb)
-    `, [randomBytes(16).toString("hex"), boxId, session.userId, JSON.stringify({ cityId, district, area, locationType, boxStatus: "Active" })]);
+    `, [randomBytes(16).toString("hex"), boxId, session.userId, JSON.stringify({ cityId, district, area, locationType, ...coordinates, boxStatus: "Active" })]);
     await client.query("COMMIT");
     revalidateTag("dashboard-db-records", { expire: 0 });
     return Response.json({ boxId }, { status: 201, headers: { "Cache-Control": "no-store" } });

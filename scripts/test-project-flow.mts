@@ -179,7 +179,7 @@ try {
   assert.equal((await fixtures.query('SELECT district FROM donation_boxes WHERE box_id=$1',[newBox])).rows[0].district,'Karachi East');
   await fixtures.query('INSERT INTO branch_box_assignments(box_id,city_id,branch_id) VALUES($1,\'C001\',\'QA-BR1\')',[newBox]);
   const treeHtml=await (await call('/dashboard/admin/boxes?year=all',200,{session:cityAdmin})).text();
-  assert.ok(treeHtml.includes('data-tree-node="city"'));assert.ok(treeHtml.includes('data-tree-node="area"'));assert.ok(treeHtml.includes('data-tree-node="box"'));assert.ok(treeHtml.includes('data-tree-edge'));assert.ok(treeHtml.includes(newBox));assert.ok(!treeHtml.includes('QA-BOX2'));
+  assert.ok(treeHtml.includes('Donation box location network'));assert.ok(treeHtml.includes('GPS pending'));assert.ok(treeHtml.includes(newBox));assert.ok(!treeHtml.includes('QA-BOX2'));
   await call('/api/dashboard/boxes/QA-BOX1/district',403,{session:superAdmin,method:'PATCH',json:{district:'Karachi South'}});
   await call('/api/dashboard/boxes/QA-BOX1/district',403,{session:rider,method:'PATCH',json:{district:'Karachi South'}});
   await call('/api/dashboard/boxes/QA-BOX2/district',404,{session:branch,method:'PATCH',json:{district:'Karachi South'}});
@@ -207,7 +207,6 @@ try {
   await call(`${taskPath}/collection`,404,{session:other,method:'POST',json:{counts:{note_100:1}}});
   await call(taskPath,409,{session:rider,method:'PATCH',json:{status:'Completed'}});
   for(const amount of ['0','-1','1.234','invalid']) await call(`${taskPath}/collection`,400,{session:rider,method:'POST',json:{amount}});
-<<<<<<< HEAD
   await call(`${taskPath}/collection`,409,{session:rider,method:'POST',json:{counts:{note_100:1}}});
   await call(taskPath,409,{session:rider,method:'PATCH',json:{stage:'arrived'}});
   await call(taskPath,400,{session:rider,method:'PATCH',json:{status:'Skipped'}});
@@ -224,20 +223,14 @@ try {
   const submitted=await (await call(`${taskPath}/collection`,201,{session:rider,method:'POST',json:{counts:{note_1000:1,note_100:2,note_20:1,note_10:1,coin_2:2,coin_1:1},amount:999999,notes:'Counted'}})).json();
   await call(`${taskPath}/collection`,409,{session:rider,method:'POST',json:{counts:{note_100:1}}});
   await call('/api/dashboard/tasks/QA-VISIT/collection',409,{session:rider,method:'POST',json:{counts:{coin_1:1}}});
-=======
-  await call(taskPath,200,{session:rider,method:'PATCH',json:{status:'In Progress',notes:'Started'}});
-  const submitted=await (await call(`${taskPath}/collection`,201,{session:rider,method:'POST',json:{amount:'1234.50',notes:'Counted'}})).json();
   const savedTask=(await fixtures.query('SELECT task_status,workflow_stage,completed_at,completion_time,jsonb_array_length(workflow_events)::int AS event_count FROM rider_tasks WHERE task_id=$1',[taskData.taskId])).rows[0];
-  assert.equal(savedTask.task_status,'Completed');assert.equal(savedTask.workflow_stage,'completed');assert.ok(savedTask.completed_at);assert.ok(savedTask.completion_time);assert.equal(savedTask.event_count,3);
-  const branchTaskHtml=await (await call('/dashboard/manager/riders',200,{session:branch})).text();assert.ok(branchTaskHtml.includes(taskData.taskId));assert.ok(branchTaskHtml.includes('Completed'));assert.ok(branchTaskHtml.includes('1,234.5'));assert.ok(!branchTaskHtml.includes('QA-BOX-BR2'));assert.ok(!branchTaskHtml.includes('QA-RIDER-OTHER'));
-  const branchCollectionsHtml=await (await call('/dashboard/manager/collections?year=all',200,{session:branch})).text();assert.ok(branchCollectionsHtml.includes('Rider cash submissions'));assert.ok(branchCollectionsHtml.includes('1,234.5'));assert.ok(branchCollectionsHtml.includes('Verify'));
+  assert.equal(savedTask.task_status,'Completed');assert.equal(savedTask.workflow_stage,'submitted');assert.ok(savedTask.completed_at);assert.ok(savedTask.completion_time);assert.equal(savedTask.event_count,4);
+  const branchTaskHtml=await (await call('/dashboard/manager/riders',200,{session:branch})).text();assert.ok(branchTaskHtml.includes(taskData.taskId));assert.ok(branchTaskHtml.includes('Completed'));assert.ok(branchTaskHtml.includes('1,235'));assert.ok(!branchTaskHtml.includes('QA-BOX-BR2'));assert.ok(!branchTaskHtml.includes('QA-RIDER-OTHER'));
+  const branchCollectionsHtml=await (await call('/dashboard/manager/collections?year=all',200,{session:branch})).text();assert.ok(branchCollectionsHtml.includes('Rider cash submissions'));assert.ok(branchCollectionsHtml.includes('1,235'));assert.ok(branchCollectionsHtml.includes('Verify'));
   assert.ok(!branchCollectionsHtml.includes('QA-COL-BR2'));
   const branchCollectionApi=await (await call('/api/dashboard/admin/collections',200,{session:branch})).json();assert.ok(branchCollectionApi.records.every((record:{box_id:string})=>record.box_id!=='QA-BOX-BR2'));
   await call('/api/dashboard/collections/QA-COL-BR2/verification',404,{session:branch});
   await call('/api/dashboard/collections/QA-COL-BR2/verification',404,{session:branch,method:'PATCH',json:{status:'Verified'}});
-  await call(`${taskPath}/collection`,409,{session:rider,method:'POST',json:{amount:'1234.50'}});
-  await call('/api/dashboard/tasks/QA-VISIT/collection',409,{session:rider,method:'POST',json:{amount:'1'}});
->>>>>>> origin/usmanwork
   await call('/api/dashboard/tasks/QA-VISIT',200,{session:rider,method:'PATCH',json:{status:'Completed',notes:'No cash visit'}});
   const closedTask=await(await call('/api/dashboard/tasks/QA-CANCEL',409,{session:rider,method:'PATCH',json:{status:'In Progress'}})).json();
   assert.equal(closedTask.status,'Cancelled');assert.equal(closedTask.stage,'assigned');

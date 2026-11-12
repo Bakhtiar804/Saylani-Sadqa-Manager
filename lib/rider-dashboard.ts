@@ -48,16 +48,12 @@ export async function getRiderDashboard(userId: string) {
   const [taskResult, collectionResult, fieldLogResult, summaryResult] = await Promise.all([
     pool.query(`
       SELECT task.task_id, task.task_date, task.task_type, task.task_status,
-<<<<<<< HEAD
-        task.completion_time, task.notes, task.workflow_stage, task.workflow_events::text, box.box_id, box.qr_code, box.area,
-=======
         task.completion_time,
         TO_CHAR(task.completed_at AT TIME ZONE 'Asia/Karachi','YYYY-MM-DD HH24:MI') AS completed_at,
-        task.workflow_stage, task.workflow_events, task.notes,
+        task.workflow_stage, task.workflow_events::text, task.notes,
         submitted_collection.collection_id, submitted_collection.collection_amount_pkr::float8 AS collected_amount_pkr,
         submitted_collection.collection_status,
         box.box_id, box.qr_code, box.area,
->>>>>>> origin/usmanwork
         box.location_type, box.location_description, box.box_status,
         city.city_name, partner.partner_name
       FROM rider_tasks task

@@ -6,6 +6,8 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { CityOption, DataRecord } from "@/lib/dashboard-types";
 
+import BoxCoordinateFields from './box-coordinate-fields';
+
 type BoxRegistrationFormProps = {
   cities: CityOption[];
   partners: DataRecord[];
@@ -59,6 +61,7 @@ export default function BoxRegistrationForm({ cities, partners, users, riders, f
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Field custodian <span className="text-[11px] font-normal">Optional</span><select name="custodianUserId" className="h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#203526]"><option value="">No custodian assigned</option>{cityStaff.map((user) => <option key={String(user.team_id)} value={String(user.team_id)}>{String(user.full_name)}</option>)}</select></label>
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Assigned rider <span className="text-[11px] font-normal">Optional</span><select name="assignedRiderId" className="h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#203526]"><option value="">No rider assigned</option>{cityRiders.map((rider) => <option key={String(rider.rider_id)} value={String(rider.rider_id)}>{String(rider.rider_name)}</option>)}</select></label>
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455] sm:col-span-2 xl:col-span-3">Location details<textarea name="locationDescription" required maxLength={1000} rows={2} placeholder="Street address, landmarks, or access instructions" className="rounded-lg border border-[#dce8dc] p-3 text-sm font-normal text-[#203526]"/></label>
+      <div className="sm:col-span-2 xl:col-span-3"><BoxCoordinateFields disabled={busy}/></div>
       {error && <p role="alert" className="text-sm text-[#913a34] sm:col-span-2 xl:col-span-3">{error}</p>}
       {success && <p role="status" className="text-sm text-[#276431] sm:col-span-2 xl:col-span-3">{success}</p>}
       <div className="sm:col-span-2 xl:col-span-3"><button disabled={busy || !cityId} className="h-10 rounded-lg bg-[#276431] px-4 text-sm font-semibold text-white hover:bg-[#1f5129] disabled:opacity-50">{busy ? "Registering…" : "Register active box"}</button></div>

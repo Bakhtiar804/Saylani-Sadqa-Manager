@@ -3,7 +3,7 @@ type DashboardModule = { href:string;label:string;mobileLabel:string;icon:IconNa
 export const dashboardModules:DashboardModule[] = [
  {href:'/dashboard',label:'Overview',mobileLabel:'Overview',icon:'grid'},
  {href:'/dashboard/collections',label:'Collections',mobileLabel:'Collections',icon:'wallet'},
- {href:'/dashboard/boxes',label:'Network Tree',mobileLabel:'Network',icon:'box'},
+ {href:'/dashboard/boxes',label:'Network Map',mobileLabel:'Network',icon:'box'},
  {href:'/dashboard/riders',label:'Riders',mobileLabel:'Riders',icon:'bike'},
  {href:'/dashboard/finance',label:'Operational Cost',mobileLabel:'Costs',icon:'cash'},
  {href:'/dashboard/leaderboard',label:'Leaderboard',mobileLabel:'Rankings',icon:'leaderboard'},
@@ -12,7 +12,7 @@ export const dashboardModules:DashboardModule[] = [
 export const adminDashboardModules:DashboardModule[] = [
  {href:'/dashboard/admin',label:'Overview',mobileLabel:'Overview',icon:'grid'},
  {href:'/dashboard/admin/collections',label:'Collections',mobileLabel:'Collections',icon:'wallet'},
- {href:'/dashboard/admin/boxes',label:'Network Tree',mobileLabel:'Network',icon:'box'},
+ {href:'/dashboard/admin/boxes',label:'Network Map',mobileLabel:'Network',icon:'box'},
  {href:'/dashboard/admin/donation-boxes',label:'Donation Boxes',mobileLabel:'Boxes',icon:'box'},
  {href:'/dashboard/admin/riders',label:'Riders',mobileLabel:'Riders',icon:'bike'},
  {href:'/dashboard/admin/finance',label:'Operational Cost',mobileLabel:'Costs',icon:'cash'},
@@ -24,7 +24,7 @@ export const adminDashboardModules:DashboardModule[] = [
 export const cityManagerDashboardModules:DashboardModule[] = [
  {href:'/dashboard/manager',label:'Overview',mobileLabel:'Overview',icon:'grid'},
  {href:'/dashboard/manager/collections',label:'Collections',mobileLabel:'Collections',icon:'wallet'},
- {href:'/dashboard/manager/boxes',label:'Network Tree',mobileLabel:'Network',icon:'box'},
+ {href:'/dashboard/manager/boxes',label:'Network Map',mobileLabel:'Network',icon:'box'},
  {href:'/dashboard/manager/donation-boxes',label:'Donation Boxes',mobileLabel:'Boxes',icon:'box'},
  {href:'/dashboard/manager/riders',label:'Riders',mobileLabel:'Riders',icon:'bike'},
  {href:'/dashboard/manager/finance',label:'Operational Cost',mobileLabel:'Costs',icon:'cash'},

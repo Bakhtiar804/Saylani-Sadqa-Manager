@@ -30,7 +30,10 @@
     "migrate:rider-notifications": "jiti scripts/migrate-rider-notifications.mts",
     "test:rider-notifications-ui": "jiti scripts/test-rider-notifications-ui.mts",
     "migrate:rider-workflow-guards": "jiti scripts/migrate-rider-workflow-guards.mts",
-    "test:rider-details-refresh": "jiti scripts/test-rider-details-refresh.mts"
+    "test:rider-details-refresh": "jiti scripts/test-rider-details-refresh.mts",
+    "migrate:box-coordinates": "jiti scripts/migrate-box-coordinates.mts",
+    "test:box-map": "jiti scripts/test-box-map.mts && node scripts/test-box-location-api.mjs",
+    "test:box-map-db": "node --conditions=react-server --import jiti/register scripts/run-box-map-db.mts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.5.0",
@@ -39,6 +42,7 @@
     "clsx": "^2.1.1",
     "exceljs": "^4.4.0",
     "jiti": "^2.7.0",
+    "maplibre-gl": "^6.18.0",
     "next": "16.4.5",
     "pg": "^8.23.1",
     "postcss": "^8.5.32",
