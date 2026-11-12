@@ -406,6 +406,7 @@ export type CollectionExplorerOptions = {
   search?: string;
   status?: string;
   city?: string;
+  branchId?: string;
   from?: string;
   to?: string;
   sort?: string;
@@ -430,6 +431,7 @@ export async function getCollectionExplorerPage(options: CollectionExplorerOptio
   }
   if (options.status && options.status !== "all") where.push(`collection.collection_status = ${add(options.status)}`);
   if (options.city && options.city !== "all") where.push(`collection.city_id = ${add(options.city)}`);
+  if (options.branchId) where.push(`EXISTS (SELECT 1 FROM branch_box_assignments branch_assignment WHERE branch_assignment.box_id=collection.box_id AND branch_assignment.city_id=collection.city_id AND branch_assignment.branch_id=${add(options.branchId)})`);
   if (options.from && /^\d{4}-\d{2}-\d{2}$/.test(options.from)) where.push(`collection.collection_date >= ${add(options.from)}`);
   if (options.to && /^\d{4}-\d{2}-\d{2}$/.test(options.to)) where.push(`collection.collection_date <= ${add(options.to)}`);
   const filterSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -487,6 +489,7 @@ export async function getFieldCollectionExplorerPage(options: CollectionExplorer
   }
   if (options.status && options.status !== "all") where.push(`field.collection_status = ${add(options.status)}`);
   if (options.city && options.city !== "all") where.push(`field.city_id = ${add(options.city)}`);
+  if (options.branchId) where.push(`EXISTS (SELECT 1 FROM branch_box_assignments branch_assignment WHERE branch_assignment.box_id=field.box_id AND branch_assignment.city_id=field.city_id AND branch_assignment.branch_id=${add(options.branchId)})`);
   if (options.from && /^\d{4}-\d{2}-\d{2}$/.test(options.from)) where.push(`field.collection_date >= ${add(options.from)}`);
   if (options.to && /^\d{4}-\d{2}-\d{2}$/.test(options.to)) where.push(`field.collection_date <= ${add(options.to)}`);
   const filterSql = where.length ? `WHERE ${where.join(" AND ")}` : "";

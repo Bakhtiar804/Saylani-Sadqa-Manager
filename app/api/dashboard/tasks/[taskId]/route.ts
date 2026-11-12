@@ -23,8 +23,8 @@ async function handlePATCH(request: Request, context: { params: Promise<{ taskId
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
-    const result = await client.query<{ task_id: string; task_status: string;task_type:string }>(`
-      SELECT task.task_id, task.task_status,task.task_type FROM rider_tasks task
+    const result = await client.query<{ task_id: string; task_status: string; task_type: string; workflow_stage: string }>(`
+      SELECT task.task_id, task.task_status, task.task_type, task.workflow_stage FROM rider_tasks task
       JOIN riders rider ON rider.rider_id = task.rider_id
       WHERE task.task_id = $1 AND rider.team_id = $2 AND rider.employment_status='Active' FOR UPDATE OF task
     `, [taskId, session.userId]);
@@ -38,11 +38,29 @@ async function handlePATCH(request: Request, context: { params: Promise<{ taskId
       return Response.json({ error: "Closed tasks cannot be changed." }, { status: 409 });
     }
     const status = body.status as typeof taskStatuses[number];
+    if (status === current.task_status) {
+      await client.query("ROLLBACK");
+      return Response.json({ error: "This task already has that status." }, { status: 409 });
+    }
+    if (current.task_status === 'Skipped' && status !== 'In Progress') {
+      await client.query("ROLLBACK");
+      return Response.json({ error: "Resume a skipped task before changing its status." }, { status: 409 });
+    }
     if(status==='Completed' && (current.task_type==='Scheduled Collection' || current.task_status==='Skipped')) {
       await client.query('ROLLBACK');
       return Response.json({error:'Collection tasks require a cash submission. Resume skipped tasks before completing them.'},{status:409});
     }
-    await client.query(`UPDATE rider_tasks SET task_status = $2::text, notes = CASE WHEN $3::text = '' THEN notes ELSE CONCAT_WS(CHR(10), notes, 'Rider update: ' || $3::text) END, completion_time = CASE WHEN $2::text = 'Completed' THEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time ELSE NULL END WHERE task_id = $1`, [taskId, status, notes]);
+    const stage = status === 'In Progress' ? 'in_progress' : status.toLowerCase();
+    await client.query(`UPDATE rider_tasks SET
+      task_status = $2::text,
+      workflow_stage = $3,
+      workflow_events = COALESCE(workflow_events, '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
+        'event', 'status_changed', 'from', $4::text, 'to', $2::text, 'actor_team_id', $5::text, 'notes', NULLIF($6::text, ''), 'at', CURRENT_TIMESTAMP
+      )),
+      notes = CASE WHEN $6::text = '' THEN notes ELSE CONCAT_WS(CHR(10), notes, 'Rider update: ' || $6::text) END,
+      completed_at = CASE WHEN $2::text = 'Completed' THEN CURRENT_TIMESTAMP ELSE NULL END,
+      completion_time = CASE WHEN $2::text = 'Completed' THEN (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time ELSE NULL END
+      WHERE task_id = $1`, [taskId, status, stage, current.task_status, session.userId, notes]);
     await client.query(`
       INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'rider_task', $2, 'status_updated', $3, $4::jsonb, $5::jsonb)

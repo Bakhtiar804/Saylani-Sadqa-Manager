@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
 import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-auth";
+import { getActiveTeamBranch } from "@/lib/city-branches";
 
 const boxStatuses = ["Active", "Inactive", "Damaged", "Under Review"] as const;
 
@@ -30,7 +31,9 @@ async function handlePATCH(request: Request, context: { params: Promise<{ boxId:
       "SELECT box_status, city_id FROM donation_boxes WHERE box_id = $1 FOR UPDATE", [boxId],
     );
     const current = result.rows[0];
-    if (!current || (session.role !== "super_admin" && current.city_id !== session.cityId)) {
+    const branch = session.role === 'city_manager' && session.cityId ? await getActiveTeamBranch(session.userId, session.cityId) : null;
+    const branchBox = branch ? await client.query("SELECT 1 FROM branch_box_assignments WHERE box_id = $1 AND city_id = $2 AND branch_id = $3", [boxId, session.cityId, branch.branchId]) : null;
+    if (!current || current.city_id !== session.cityId || (session.role === 'city_manager' && !branchBox?.rowCount)) {
       await client.query("ROLLBACK");
       return Response.json({ error: "This box is not available in your scope." }, { status: 404 });
     }

@@ -3,7 +3,7 @@ import { connection } from 'next/server';
 import { redirect } from 'next/navigation';
 import { getOperationsSession } from '@/lib/operations-auth';
 import { getMonthlyReportOptions, getMonthlyReports, type MonthlyReportFilters, type ReportView } from '@/lib/monthly-reports';
-import { formatPKR } from '@/lib/dashboard-data';
+import { formatPKR, getCollectionExplorerPage } from '@/lib/dashboard-data';
 import PageHeading from './page-heading';
 import MetricGrid from './metric-grid';
 import ChartPanel from './chart-panel';
@@ -15,6 +15,7 @@ import { buildExpenseTrend } from '@/lib/expense-trend';
 import AutoFilterForm from './auto-filter-form';
 import ReportAnalytics from './report-analytics';
 import {NetworkCitySelection,SelectedCityInventoryLink} from './network-city-selection';
+import { getActiveTeamBranch } from '@/lib/city-branches';
 
 export type ReportPageProps = { searchParams: Promise<MonthlyReportFilters> };
 const fieldClass = 'h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm text-[#203526]';
@@ -32,12 +33,16 @@ export default async function MonthlyReportPage({searchParams,view='overview'}: 
   const filters = {year: typeof requested.year==='string' ? requested.year : options.years[0] || 'all',
     city:typeof requested.city==='string' ? requested.city : 'all', channel:typeof requested.channel==='string' ? requested.channel : 'all'};
   const data = await getMonthlyReports(filters,scope);
+  const assignedBranch=session.role==='city_manager'&&session.cityId?await getActiveTeamBranch(session.userId,session.cityId):null;
+  const liveCollections=view==='collections'&& (session.role!=='city_manager'||assignedBranch)
+    ? await getCollectionExplorerPage({city:data.cityId||undefined,branchId:assignedBranch?.branchId,page:1})
+    : null;
   const base = session.role==='admin'?'/dashboard/admin':session.role==='city_manager'?'/dashboard/manager':'/dashboard';
   const cityName = scope.network ? options.cities.find(city=>city.city_id===data.cityId)?.city_name || 'All reporting cities' : options.cities[0]?.city_name || 'Assigned city';
   const expenseTrend=buildExpenseTrend(data.monthly,data.year);
   const inventoryHref=`${base}/inventory?${new URLSearchParams({year:data.year,city:data.cityId||'all',channel:data.channel,...(data.latestMonth?{month:data.latestMonth}:{})})}`;
   const period = data.monthly.length ? `${data.monthly[0].month} to ${data.monthly.at(-1)!.month}` : 'No reports in this selection';
-  const noData = view==='expenses' ? !data.expenses.length : view==='coverage' ? !data.latestBoxes.length && !data.staff.length : !data.collections.length;
+  const noData = view==='expenses' ? !data.expenses.length : view==='coverage' ? !data.latestBoxes.length && !data.staff.length : !data.collections.length && !(view==='collections'&&Boolean(liveCollections?.totalRecords));
   const amountLabel = (rows: typeof data.collections,total: number) => rows.some(row=>row.amount_pkr!==null) ? formatPKR(total) : 'Not reported';
   const publicRows = data.collections.filter(row=>row.channel==='public');
   const branchRows = data.collections.filter(row=>row.channel==='branch');
@@ -95,7 +100,10 @@ export default async function MonthlyReportPage({searchParams,view='overview'}: 
       {view==='expenses' ? <RecordExplorer title="Public expense reports" description="Original monthly expense entries. A dash in the source remains unreported." records={data.expenses} columns={[{key:'report_id',label:'Report ID'},{key:'month',label:'Month'},{key:'city_name',label:'City'},{key:'expense_category',label:'Category'},{key:'amount_pkr',label:'Amount'},{key:'source_value_state',label:'Source value'}]} statusKey="expense_category" dateKey="" cities={options.cities} initialSortKey="month"/> : view==='coverage' ? <>
         <div className="mb-6"><RecordExplorer title={`Box counts · ${data.latestMonth || 'No snapshot'}`} description="Latest selected-month counts. These are aggregate counts, not individual registered boxes." records={data.latestBoxes} columns={[{key:'report_id',label:'Report ID'},{key:'city_name',label:'City'},{key:'channel',label:'Channel'},{key:'month',label:'Month'},{key:'box_count',label:'Boxes'}]} statusKey="channel" cities={options.cities} initialSortKey="month"/></div>
         <RecordExplorer title="Public staff history" description="Monthly headcounts supplied in Public_Staff; no employee identities are implied." records={data.staff} columns={[{key:'report_id',label:'Report ID'},{key:'month',label:'Month'},{key:'city_name',label:'City'},{key:'staff_count',label:'Staff'}]} cities={options.cities} initialSortKey="month"/>
-      </> : <RecordExplorer title="Monthly collection reports" description="One city, month and channel per row. Expand to see source sheet and row." records={tableRows} columns={[{key:'report_id',label:'Report ID'},{key:'month',label:'Month'},{key:'city_name',label:'City'},{key:'channel',label:'Channel'},{key:'box_count',label:'Boxes'},{key:'amount_pkr',label:'Amount'},{key:'amount_state',label:'Amount status'}]} statusKey="channel" cities={options.cities} initialSortKey="month"/>}
+      </> : <>
+        <RecordExplorer title="Monthly collection reports" description="One city, month and channel per row. Expand to see source sheet and row." records={tableRows} columns={[{key:'report_id',label:'Report ID'},{key:'month',label:'Month'},{key:'city_name',label:'City'},{key:'channel',label:'Channel'},{key:'box_count',label:'Boxes'},{key:'amount_pkr',label:'Amount'},{key:'amount_state',label:'Amount status'}]} statusKey="channel" cities={options.cities} initialSortKey="month"/>
+        {view==='collections'&&liveCollections&&<div className="mt-6"><RecordExplorer title="Rider cash submissions" description="Select Verify on a collection to confirm its amount or flag it for review." records={liveCollections.records} totalRecords={liveCollections.totalRecords} columns={[{key:'collection_id',label:'Collection'},{key:'collection_date',label:'Date'},{key:'rider_name',label:'Rider'},{key:'box_id',label:'Box'},{key:'collection_amount_pkr',label:'Collected (PKR)'},{key:'collection_status',label:'Verification status'}]} statusKey="collection_status" dateKey="collection_date" cities={options.cities} initialSortKey="collection_date" allowCollectionReview={session.role==='admin'||session.role==='city_manager'}/></div>}
+      </>}
       </details>
     </>}
     <div className="mt-6 flex flex-wrap gap-4 text-sm font-semibold text-[#276431]"><Link href={`${base}/transactions`}>Individual collection register →</Link><SelectedCityInventoryLink href={inventoryHref}>Registered box inventory →</SelectedCityInventoryLink>{scope.network && <Link href="/dashboard/handovers">Cash handover register →</Link>}</div>

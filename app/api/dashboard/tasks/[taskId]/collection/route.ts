@@ -54,7 +54,15 @@ async function handlePOST(request: Request, context: { params: Promise<{ taskId:
         collection_amount_pkr, collection_status, recorded_by_team_id, notes, is_demo_record
       ) VALUES ($1, $2, $3, $4, $5, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::date, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time, $6, 'Pending Verification', $7, $8, FALSE)
     `, [collectionId, task.box_id, task.rider_id, task.city_id, task.partner_id, amount, session.userId, notes || null]);
-    await client.query(`UPDATE rider_tasks SET task_status = 'Completed', completion_time = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time WHERE task_id = $1`, [taskId]);
+    await client.query(`UPDATE rider_tasks SET
+      task_status = 'Completed', workflow_stage = 'completed',
+      workflow_events = COALESCE(workflow_events, '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
+        'event', 'collection_submitted', 'from', $4::text, 'to', 'Completed',
+        'actor_team_id', $2::text, 'collection_id', $3::text, 'at', CURRENT_TIMESTAMP
+      )),
+      completed_at = CURRENT_TIMESTAMP,
+      completion_time = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time
+      WHERE task_id = $1`, [taskId, session.userId, collectionId, task.task_status]);
     await client.query(`
       INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'collection', $2, 'submitted', $3, NULL, $4::jsonb)

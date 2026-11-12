@@ -15,6 +15,10 @@ type RiderTask = DataRecord & {
   area: string | null;
   location_description: string | null;
   box_status: string;
+  completed_at?: string | null;
+  collection_id?: string | null;
+  collected_amount_pkr?: number | null;
+  collection_status?: string | null;
 };
 
 function formatDate(value: string) {
@@ -23,7 +27,7 @@ function formatDate(value: string) {
 }
 
 export default function RiderTaskActions({tasks,canWork=true}:{tasks:DataRecord[];canWork?:boolean}) {
-  const snapshot=JSON.stringify([canWork,tasks.map(task=>[task.task_id,task.task_status,task.box_status])]);
+  const snapshot=JSON.stringify([canWork,tasks.map(task=>[task.task_id,task.task_status,task.box_status,task.collected_amount_pkr,task.collection_status])]);
   return <RiderTaskContent key={snapshot} tasks={tasks} canWork={canWork}/>;
 }
 function RiderTaskContent({ tasks,canWork }: { tasks: DataRecord[];canWork:boolean }) {
@@ -88,7 +92,7 @@ function RiderTaskContent({ tasks,canWork }: { tasks: DataRecord[];canWork:boole
       const message = messages[task.task_id];
       return <article key={task.task_id} className="rounded-2xl border border-[#e3ebe0] bg-white p-5 shadow-[0_3px_14px_rgba(28,52,33,.035)]">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><p className="text-xs font-bold uppercase tracking-wide text-[#718073]">{task.task_id} · {formatDate(task.task_date)}</p><h2 className="mt-1 text-lg font-bold text-[#203526]">{task.task_type} · {task.box_id}</h2><p className="mt-1 text-sm text-[#536455]">{task.area || "Area not specified"}{task.location_description ? ` · ${task.location_description}` : ""}</p></div>
+          <div><p className="text-xs font-bold uppercase tracking-wide text-[#718073]">{task.task_id} · {formatDate(task.task_date)}</p><h2 className="mt-1 text-lg font-bold text-[#203526]">{task.task_type} · {task.box_id}</h2><p className="mt-1 text-sm text-[#536455]">{task.area || "Area not specified"}{task.location_description ? ` · ${task.location_description}` : ""}</p>{isCompleted && task.completed_at && <p className="mt-2 text-xs font-semibold text-[#276431]">Completed at {task.completed_at} PKT</p>}{task.collected_amount_pkr != null && <p className="mt-2 text-sm font-semibold text-[#276431]">Collected PKR {Number(task.collected_amount_pkr).toLocaleString("en-PK", { maximumFractionDigits: 2 })} · {task.collection_status || "Submitted"}</p>}</div>
           <span className={`rounded-full px-3 py-1 text-xs font-bold ${isCompleted ? "bg-[#e8f4e5] text-[#276431]" : isSkipped ? "bg-[#f0f1ef] text-[#657568]" : "bg-[#fff4db] text-[#91661c]"}`}>{status}</span>
         </div>
         {message?.error && <p role="alert" className="mt-4 rounded-lg bg-[#fbeceb] p-3 text-sm text-[#913a34]">{message.error}</p>}

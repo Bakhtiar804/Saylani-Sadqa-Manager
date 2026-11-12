@@ -53,13 +53,30 @@ export async function getRiderDashboard(userId: string) {
   const [taskResult, collectionResult, fieldLogResult, summaryResult] = await Promise.all([
     pool.query(`
       SELECT task.task_id, task.task_date, task.task_type, task.task_status,
-        task.completion_time, task.notes, box.box_id, box.qr_code, box.area,
+        task.completion_time,
+        TO_CHAR(task.completed_at AT TIME ZONE 'Asia/Karachi','YYYY-MM-DD HH24:MI') AS completed_at,
+        task.workflow_stage, task.workflow_events, task.notes,
+        submitted_collection.collection_id, submitted_collection.collection_amount_pkr::float8 AS collected_amount_pkr,
+        submitted_collection.collection_status,
+        box.box_id, box.qr_code, box.area,
         box.location_type, box.location_description, box.box_status,
         city.city_name, partner.partner_name
       FROM rider_tasks task
       JOIN donation_boxes box ON box.box_id = task.box_id
       JOIN cities city ON city.city_id = box.city_id
       LEFT JOIN partners partner ON partner.partner_id = box.partner_id
+      LEFT JOIN LATERAL (
+        SELECT submission.collection_id FROM (
+          SELECT event.value->>'collection_id' AS collection_id,(event.value->>'at')::timestamptz AS submitted_at
+          FROM jsonb_array_elements(COALESCE(task.workflow_events,'[]'::jsonb)) event(value)
+          WHERE event.value->>'event'='collection_submitted'
+          UNION ALL
+          SELECT audit.entity_id AS collection_id,audit.occurred_at AS submitted_at
+          FROM activity_audit_log audit
+          WHERE audit.entity_type='collection' AND audit.after_data->>'taskId'=task.task_id
+        ) submission ORDER BY submission.submitted_at DESC NULLS LAST LIMIT 1
+      ) task_submission ON TRUE
+      LEFT JOIN collections submitted_collection ON submitted_collection.collection_id=task_submission.collection_id
       WHERE task.rider_id = $1
       ORDER BY task.task_date DESC, task.task_id
     `, [profile.rider_id]),

@@ -1,1 +1,1 @@
-export { default } from "../../admin/inventory/page";
+export { default } from "../donation-boxes/page";

@@ -2,14 +2,17 @@ import { connection } from 'next/server';
 import { redirect } from 'next/navigation';
 import { getOperationsSession } from '@/lib/operations-auth';
 import { getCityOptions,getCollectionExplorerPage,getFieldCollectionExplorerPage } from '@/lib/dashboard-data';
+import { getActiveTeamBranch } from '@/lib/city-branches';
 import PageHeading from './page-heading';
 import RecordExplorer from './record-explorer';
 
 export default async function OperationalCollectionsPage() {
   await connection();const session=await getOperationsSession();if(!session) redirect('/sign-in');if(session.role==='rider') redirect('/dashboard/rider/collections');
   if(session.role!=='super_admin' && !session.cityId) return <PageHeading eyebrow="Collections" title="City assignment required" description="An operating city is required to view collection records."/>;
+  const branch=session.role==='city_manager'&&session.cityId?await getActiveTeamBranch(session.userId,session.cityId):null;
+  if(session.role==='city_manager'&&!branch)return <PageHeading eyebrow="Collections" title="Branch assignment required" description="An active branch assignment is required to view branch collection records."/>;
   const city=session.role==='super_admin'?'all':session.cityId!;
-  const [collections,logs,allCities]=await Promise.all([getCollectionExplorerPage({city}),getFieldCollectionExplorerPage({city}),getCityOptions()]);
+  const [collections,logs,allCities]=await Promise.all([getCollectionExplorerPage({city,branchId:branch?.branchId}),getFieldCollectionExplorerPage({city,branchId:branch?.branchId}),getCityOptions()]);
   const cities=session.role==='super_admin'?allCities:allCities.filter(row=>row.city_id===session.cityId);
   const endpoint=session.role==='super_admin'?'/api/dashboard/collections':'/api/dashboard/admin/collections';
   return <><PageHeading eyebrow="Field records" title="Individual Collections" description="Recorded collections, field visits and cash handovers."/>

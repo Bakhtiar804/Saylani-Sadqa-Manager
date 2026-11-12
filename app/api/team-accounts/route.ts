@@ -4,6 +4,7 @@ import { hashPassword } from "@/lib/auth";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 import { getDatabasePool } from "@/lib/db";
 import { hasValidRequestOrigin } from "@/lib/operations-auth";
+import { getActiveTeamBranch } from "@/lib/city-branches";
 import { cookies } from "next/headers";
 import { creatableRoles, deletableRoles, editableRoles } from '@/lib/permissions';
 
@@ -78,7 +79,7 @@ async function handlePOST(request: Request) {
     return Response.json({ error: "Enter the account details." }, { status: 400 });
   }
   const body = input as Record<string, unknown>;
-  const { name, email, phone, password, role, cityId: requestedCity, assignedZone, accountStatus, employmentStatus } = body;
+  const { name, email, phone, password, role, cityId: requestedCity, assignedZone, accountStatus, employmentStatus, branchId: requestedBranch } = body;
   if (typeof name !== "string" || typeof email !== "string" || typeof phone !== "string" || typeof password !== "string" || typeof role !== "string") {
     return Response.json({ error: "Enter the name, phone, email, password, and role." }, { status: 400 });
   }
@@ -110,6 +111,26 @@ async function handlePOST(request: Request) {
   if (typeof accountStatus !== "string" || !["active", "inactive", "suspended"].includes(accountStatus)) {
     return Response.json({ error: "Choose a valid account status." }, { status: 400 });
   }
+  let branchId: string | undefined;
+  let assignedBranch: string | undefined;
+  if (role === "city_manager") {
+    branchId = typeof requestedBranch === "string" ? requestedBranch.trim() : "";
+    if (!branchId || branchId.length > 40) return Response.json({ error: "Choose an active branch for this Branch Admin." }, { status: 400 });
+    const branchResult = await getDatabasePool().query<{ branch_name: string }>(
+      "SELECT branch_name FROM branches WHERE branch_id = $1 AND city_id = $2 AND status = 'active' LIMIT 1",
+      [branchId, cityId],
+    );
+    assignedBranch = branchResult.rows[0]?.branch_name;
+    if (!assignedBranch) return Response.json({ error: "Choose an active branch in your assigned city." }, { status: 400 });
+    if (assignedBranch.length > 120) return Response.json({ error: "This branch name is too long to save in the account's assigned branch field." }, { status: 400 });
+  }
+  if (role === "rider" && session.role === "city_manager") {
+    const actorBranch = session.cityId ? await getActiveTeamBranch(session.userId, session.cityId) : null;
+    if (!actorBranch) return Response.json({ error: "Your Branch Admin account needs an active branch assignment." }, { status: 403 });
+    branchId = actorBranch.branchId;
+    assignedBranch = actorBranch.branchName;
+    if (assignedBranch.length > 120) return Response.json({ error: "Your branch name is too long to save in the Rider account's assigned branch field." }, { status: 400 });
+  }
   const zone = typeof assignedZone === "string" ? assignedZone.trim() : "";
   if (role === "rider" && (!zone || zone.length > 80 || !["Active", "Inactive"].includes(String(employmentStatus)))) {
     return Response.json({ error: "Enter a rider zone and choose Active or Inactive employment status." }, { status: 400 });
@@ -127,6 +148,9 @@ async function handlePOST(request: Request) {
       accountStatus: accountStatus as "active" | "inactive" | "suspended",
       assignedZone: role === "rider" ? zone : undefined,
       employmentStatus: role === "rider" ? employmentStatus as "Active" | "Inactive" : undefined,
+      branchId,
+      assignedBranch,
+      assignedByTeamId: session.userId,
     });
     return Response.json({ account }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {

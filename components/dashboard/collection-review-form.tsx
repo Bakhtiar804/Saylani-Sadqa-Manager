@@ -62,9 +62,9 @@ export default function CollectionReviewForm({ collectionId, status, onReviewed 
 
   return <div className="mt-5 space-y-4">
     <form onSubmit={submit} className="grid gap-3 rounded-xl border border-[#dce8dc] bg-white p-4 sm:grid-cols-[180px_minmax(0,1fr)_auto] sm:items-end">
-      <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Review decision<select value={decision} onChange={(event) => setDecision(event.target.value)} disabled={busy || isLocked} className="h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#203526]"><option value="Verified">Mark recorded</option><option value="Flagged">Flag for review</option></select></label>
+      <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Review decision<select value={decision} onChange={(event) => setDecision(event.target.value)} disabled={busy || isLocked} className="h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm font-normal text-[#203526]"><option value="Verified">Verify collection</option><option value="Flagged">Flag for review</option></select></label>
       <label className="grid gap-1.5 text-xs font-semibold text-[#536455]">Review note{decision === "Flagged" ? " (required)" : " (optional)"}<input value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={1000} disabled={busy || isLocked} placeholder="Add context for the audit record" className="h-10 rounded-lg border border-[#dce8dc] px-3 text-sm font-normal text-[#203526]"/></label>
-      <button type="submit" disabled={busy || isLocked} className="h-10 rounded-lg bg-[#276431] px-4 text-sm font-semibold text-white hover:bg-[#1f5129] disabled:cursor-not-allowed disabled:opacity-50">{isLocked ? "Recorded" : busy ? "Saving…" : "Save review"}</button>
+      <button type="submit" disabled={busy || isLocked} className="h-10 rounded-lg bg-[#276431] px-4 text-sm font-semibold text-white hover:bg-[#1f5129] disabled:cursor-not-allowed disabled:opacity-50">{isLocked ? "Verified" : busy ? "Saving…" : "Verify & save"}</button>
       {error && <p role="alert" className="text-sm text-[#913a34] sm:col-span-3">{error}</p>}
       {isLocked && <p className="text-xs text-[#657568] sm:col-span-3">Recorded entries are locked to preserve audit history.</p>}
     </form>
