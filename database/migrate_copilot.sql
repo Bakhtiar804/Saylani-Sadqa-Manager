@@ -17,6 +17,11 @@ CREATE TABLE IF NOT EXISTS chat_threads (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE chat_threads
+  ADD COLUMN IF NOT EXISTS context_summary TEXT,
+  ADD COLUMN IF NOT EXISTS context_token_count INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS context_compacted_at TIMESTAMPTZ;
+
 CREATE INDEX IF NOT EXISTS chat_threads_team_updated_idx
   ON chat_threads (team_id, updated_at DESC);
 

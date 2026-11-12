@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 export const metadata = {
-  title: "Insight Studio | Saylani Sadqa Manager",
+  title: "Saylani AI | Saylani Sadqa Manager",
   description: "Read-only analytics assistant for permitted Saylani records.",
 };
 
@@ -16,5 +16,5 @@ export default async function InsightsPage() {
   const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
   if (!session || !(await isCurrentLoginSession(session))) redirect("/sign-in");
 
-  return <Copilot standalone userName={session.name} userRole={session.role} />;
+  return <Copilot standalone userRole={session.role} />;
 }

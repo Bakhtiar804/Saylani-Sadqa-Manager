@@ -92,14 +92,14 @@ export default function Sidebar({
         <Link
           href="/dashboard/insights"
           aria-current={pathname === "/dashboard/insights" ? "page" : undefined}
-          aria-label="Open Insight Studio"
-          title="Insight Studio"
+          aria-label="Open Saylani AI"
+          title="Saylani AI"
           className={`group relative mt-2 flex min-h-[48px] items-center gap-3 overflow-hidden rounded-[10px] border border-[#d9ead2] bg-gradient-to-r from-[#f0f9eb] to-[#fffaf0] px-3 text-left text-[14px] font-bold text-[#276431] transition hover:-translate-y-0.5 hover:border-[#b7d8ad] hover:shadow-[0_8px_20px_rgba(69,125,60,.12)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#61bb46] max-[900px]:justify-center max-[900px]:px-0 max-[600px]:mt-0 max-[600px]:w-[70px] max-[600px]:min-w-[70px] max-[600px]:shrink-0 max-[600px]:min-h-[58px] max-[600px]:flex-col max-[600px]:gap-1 max-[600px]:text-[10px] ${pathname === "/dashboard/insights" ? "ring-2 ring-[#61bb46]/30" : ""}`}
         >
           <span className="grid size-7 place-items-center rounded-lg bg-[#dff1d8] text-[#276431] max-[600px]:size-6">
             <Icon name="spark" size={16} />
           </span>
-          <span className="max-[900px]:hidden max-[600px]:block max-[600px]:whitespace-nowrap">Insight Studio</span>
+          <span className="max-[900px]:hidden max-[600px]:block max-[600px]:whitespace-nowrap">Saylani AI</span>
           <span className="absolute right-2 top-2 size-1.5 rounded-full bg-[#d4a63b] max-[900px]:hidden" />
         </Link>
         {canManageAdmins && (

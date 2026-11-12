@@ -104,7 +104,7 @@ export async function saveChatMessage(input: {
   );
   await getDatabasePool().query(
     `UPDATE chat_threads
-     SET updated_at = CURRENT_TIMESTAMP,
+      SET updated_at = CURRENT_TIMESTAMP,
          title = CASE WHEN title = 'New analysis' AND $2 = 'user'
            THEN LEFT($1, 160) ELSE title END
      WHERE thread_id = $3 AND team_id = $4`,
