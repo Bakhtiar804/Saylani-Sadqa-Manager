@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -36,8 +36,13 @@
     "test:box-map-db": "node --conditions=react-server --import jiti/register scripts/run-box-map-db.mts"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.118",
+    "@ai-sdk/groq": "^4.0.81",
+    "@ai-sdk/openai-compatible": "^3.0.90",
+    "@ai-sdk/react": "^4.0.174",
     "@radix-ui/react-slot": "^1.5.0",
     "@tailwindcss/postcss": "^4.3.5",
+    "ai": "^7.0.170",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "exceljs": "^4.4.0",
@@ -49,9 +54,12 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-is": "^19.3.0",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.10.1",
+    "remark-gfm": "^4.0.1",
     "server-only": "^0.0.1",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
