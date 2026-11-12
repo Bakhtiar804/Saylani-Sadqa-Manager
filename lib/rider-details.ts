@@ -3,13 +3,18 @@ import { getDatabasePool } from './db';
 import type { UserSession } from './session';
 import type { DataRecord } from './dashboard-types';
 
-export function previousReportingMonth(now=new Date()) {
+export function currentReportingMonth(now=new Date()) {
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Karachi',year:'numeric',month:'2-digit'}).formatToParts(now);
   const year=Number(parts.find(part=>part.type==='year')!.value);const month=Number(parts.find(part=>part.type==='month')!.value);
-  return new Date(Date.UTC(year,month-2,1)).toISOString().slice(0,7);
+  return `${year}-${String(month).padStart(2,'0')}`;
 }
-export async function getRiderDetails(session:UserSession,requestedMonth?:string) {
-  const month=requestedMonth && /^20\d{2}-(0[1-9]|1[0-2])$/.test(requestedMonth)?requestedMonth:previousReportingMonth();
+export function previousReportingMonth(now=new Date()) {
+  const current=currentReportingMonth(now);
+  return new Date(Date.UTC(Number(current.slice(0,4)),Number(current.slice(5,7))-2,1)).toISOString().slice(0,7);
+}
+export async function getRiderDetails(session:UserSession,requestedMonth?:string,now=new Date()) {
+  const currentMonth=currentReportingMonth(now);
+  const month=requestedMonth && /^20\d{2}-(0[1-9]|1[0-2])$/.test(requestedMonth)?requestedMonth:currentMonth;
   const start=`${month}-01`;const end=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),1)).toISOString().slice(0,10);
   const ownProfile=session.role==='rider';
   // Rider scope is always the authenticated account, never a requested rider/city ID.
@@ -46,5 +51,5 @@ export async function getRiderDetails(session:UserSession,requestedMonth?:string
       JOIN donation_boxes box ON box.box_id=task.box_id
       WHERE ${scope} ${taskCity} ORDER BY task.task_date DESC`,scopeParams),
   ]);
-  return {month,profiles:profiles.rows as DataRecord[],history:history.rows as DataRecord[],boxes:boxes.rows as DataRecord[],tasks:tasks.rows as DataRecord[]};
+  return {month,currentMonth,profiles:profiles.rows as DataRecord[],history:history.rows as DataRecord[],boxes:boxes.rows as DataRecord[],tasks:tasks.rows as DataRecord[]};
 }

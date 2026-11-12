@@ -1,5 +1,20 @@
 # Project flow verification — 11 November 2026
 
+## Rider collections visible to administrators — 12 November 2026
+
+- Verified four valid November collections totaling PKR 20,096 for the reported
+  Rider. The screenshot selected October, so its monthly history correctly had
+  zero rows while the unlabelled all-time task count displayed completed work.
+- Rider Details now defaults to the current Karachi calendar month for all roles,
+  displays a clear month label and offers This month when an older month is selected.
+  Task counts are explicitly all time. Explicit historical filters remain respected.
+- Added focus refresh and 30-second visible-tab updates with duplicate-event
+  throttling and cleanup so new Rider submissions appear on the administrator page.
+- Live authenticated Super Admin HTML checks passed for the current month (four
+  records and PKR 20,096) and explicit October (zero records and This month shortcut).
+- Production build, TypeScript/ESLint, refresh interaction tests and isolated
+  month/privacy/database-guard tests passed. No production records were changed.
+
 ## Departure-only task completion fix — 12 November 2026
 
 The earlier cache-only mitigation did not repair the invalid completion records.

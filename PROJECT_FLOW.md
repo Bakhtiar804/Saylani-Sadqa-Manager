@@ -73,7 +73,10 @@ Reported counts do not imply individual box IDs or locations exist in the workbo
    Details to flag or record the entry. A flag requires a reason; recorded entries
    are locked. Each review is retained in audit history.
 6. Rider Details shows the selected month's collections by area and box. The
-   default month is the previous calendar month in Karachi time.
+   default month is the current calendar month in Karachi time. Explicit older
+   month selections remain available, with a This month shortcut. Rider Details
+   refreshes on window focus and every 30 seconds while visible. Task counts are
+   explicitly labeled all time, separately from the selected month's collections.
 7. Box registration can include a district. City/Branch Admins can assign or
    correct it from inventory Details; changes are audited. Leaderboard shows
    cities at network level and districts within a selected city. Restricted

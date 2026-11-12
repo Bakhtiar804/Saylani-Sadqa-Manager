@@ -29,7 +29,8 @@
     "test:rider-scope": "node --conditions=react-server --import jiti/register scripts/run-rider-scope.mts",
     "migrate:rider-notifications": "jiti scripts/migrate-rider-notifications.mts",
     "test:rider-notifications-ui": "jiti scripts/test-rider-notifications-ui.mts",
-    "migrate:rider-workflow-guards": "jiti scripts/migrate-rider-workflow-guards.mts"
+    "migrate:rider-workflow-guards": "jiti scripts/migrate-rider-workflow-guards.mts",
+    "test:rider-details-refresh": "jiti scripts/test-rider-details-refresh.mts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.5.0",

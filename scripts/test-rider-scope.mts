@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import nextEnv from '@next/env';
 import pg from 'pg';
-import { getRiderDetails } from '../lib/rider-details';
+import { getRiderDetails, currentReportingMonth, previousReportingMonth } from '../lib/rider-details';
 import { getDatabasePool } from '../lib/db';
 import type { UserSession } from '../lib/session';
 import { getRiderTaskNotifications, markRiderTaskNotificationsRead } from '../lib/rider-notifications';
@@ -65,6 +65,18 @@ try {
   }
   const previous=await getRiderDetails(session('TEM-001','C1'),'2026-10');
   assert.deepEqual(previous.history.map(row=>row.collection_id),['COL5']);
+  const now=new Date('2026-11-12T10:00:00Z');
+  for(const role of ['super_admin','admin','city_manager','rider'] as const) {
+    const recent=await getRiderDetails(session('TEM-001','C1',role),undefined,now);
+    assert.equal(recent.month,'2026-11');assert.equal(recent.currentMonth,'2026-11');assert.ok(recent.history.length>0);
+  }
+  const explicitPrevious=await getRiderDetails(session('TEM-001','C1'),'2026-10',now);
+  assert.equal(explicitPrevious.month,'2026-10');assert.equal(explicitPrevious.history.length,1);
+  assert.equal((await getRiderDetails(session('TEM-001','C1'),'2026-13',now)).month,'2026-11');
+  assert.equal(currentReportingMonth(new Date('2026-10-31T20:00:00Z')),'2026-11');
+  assert.equal(currentReportingMonth(new Date('2026-10-31T18:59:00Z')),'2026-10');
+  assert.equal(previousReportingMonth(new Date('2026-01-01T12:00:00Z')),'2025-12');
+  console.log('PASS current-month defaults for all roles, explicit older month, invalid month fallback and Karachi month/year boundaries.');
   for(const userId of ['UNKNOWN','',null]) {
     const empty=await getRiderDetails(session(userId as unknown as string,'C1'),'2026-11');
     assert.ok(Object.values(empty).filter(Array.isArray).every(rows=>rows.length===0),'Missing identity must never fall back to city-wide access');
