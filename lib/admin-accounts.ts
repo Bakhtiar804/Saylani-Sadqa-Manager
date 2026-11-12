@@ -1,12 +1,12 @@
 import "server-only";
 
-import { randomBytes, randomUUID } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
 import type { AppRole } from "@/lib/session";
 import type { UserSession } from "@/lib/session";
 import type { QueryResultRow } from "pg";
 import { deletableRoles, editableRoles } from './permissions';
+import { getActiveTeamBranch } from '@/lib/city-branches';
 
 export type TeamRole = "admin" | "city_manager" | "rider";
 export type TeamAccount = {
@@ -17,11 +17,23 @@ export type TeamAccount = {
   role: "City Admin" | "Branch Admin" | "Rider";
   cityId: string | null;
   cityName: string | null;
+  branchId: string | null;
+  branchName: string | null;
   zone: string | null;
   accountStatus: "active" | "inactive" | "suspended";
   employmentStatus: "Active" | "Inactive" | null;
   createdAt: string | null;
 };
+
+export type TeamBranchOption = { branch_id: string; city_id: string; branch_name: string };
+
+export async function listActiveTeamBranches(cityId?: string | null): Promise<TeamBranchOption[]> {
+  const result = await getDatabasePool().query<TeamBranchOption>(
+    `SELECT branch_id, city_id, branch_name FROM branches WHERE status = 'active' AND ($1::text IS NULL OR city_id = $1) ORDER BY branch_name`,
+    [cityId ?? null],
+  );
+  return result.rows;
+}
 
 function getTeamRoleLabel(role: TeamRole): TeamAccount["role"] {
   if (role === "admin") return "City Admin";
@@ -38,25 +50,40 @@ export async function listTeamAccounts(session: UserSession): Promise<TeamAccoun
     filter += ` AND u.city_id = $${parameters.length}`;
     filter += session.role === "admin" ? " AND r.role_key IN ('city_manager', 'branch_admin', 'rider')" : " AND r.role_key = 'rider'";
   }
+  if (session.role === "city_manager") {
+    const branch = await getActiveTeamBranch(session.userId, session.cityId!);
+    if (!branch) return [];
+    parameters.push(branch.branchId);
+    filter += ` AND COALESCE(u.branch_id, branch_assignment.branch_id) = $${parameters.length}`;
+  }
+  const branchColumns = session.role === "super_admin"
+    ? "NULL::VARCHAR AS branch_id, NULL::VARCHAR AS branch_name"
+    : "COALESCE(u.branch_id, branch_assignment.branch_id) AS branch_id, branch.branch_name";
+  const branchJoins = session.role === "super_admin" ? "" : `
+    LEFT JOIN team_member_branch_assignments branch_assignment ON branch_assignment.team_id = u.team_id
+    LEFT JOIN branches branch ON branch.branch_id = COALESCE(u.branch_id, branch_assignment.branch_id)`;
   const result = await getDatabasePool().query<QueryResultRow & {
     team_id: string; full_name: string; email: string; phone: string; role_key: TeamRole;
     city_id: string | null; city_name: string | null;
+    branch_id: string | null; branch_name: string | null;
     assigned_zone: string | null; account_status: TeamAccount["accountStatus"];
     employment_status: TeamAccount["employmentStatus"]; created_at: Date | null;
   }>(`
     SELECT u.team_id, u.full_name, u.email, u.phone, u.account_status,
       CASE r.role_key WHEN 'city_admin' THEN 'admin' WHEN 'branch_admin' THEN 'city_manager' ELSE r.role_key END AS role_key, u.city_id, city.city_name,
-      rider.assigned_zone, rider.employment_status, u.created_at
+      rider.assigned_zone, rider.employment_status, u.created_at, ${branchColumns}
     FROM team_members u
     JOIN roles r ON r.role_id = u.role_id
     LEFT JOIN cities city ON city.city_id = u.city_id
     LEFT JOIN riders rider ON rider.team_id = u.team_id
+    ${branchJoins}
     WHERE u.identity_type = 'login_account' AND u.deleted_at IS NULL AND ${filter}
     ORDER BY u.created_at DESC, u.full_name
   `, parameters);
   return result.rows.map((row) => ({
     id: row.team_id, name: row.full_name, email: row.email, phone: row.phone,
     role: getTeamRoleLabel(row.role_key), cityId: row.city_id, cityName: row.city_name,
+    branchId: row.branch_id, branchName: row.branch_name,
     zone: row.assigned_zone, accountStatus: row.account_status,
     employmentStatus: row.employment_status, createdAt: row.created_at?.toISOString() ?? null,
   }));
@@ -76,6 +103,10 @@ export async function softDeleteTeamAccount(input: {
 }): Promise<void> {
   const allowedTargets = deletableRoles[input.actor.role];
   if (!allowedTargets?.length || !deletableRoles[input.actor.role].length) throw new TeamAccountDeleteError("You cannot delete team accounts.", 403);
+  const actorBranch = input.actor.role === "city_manager" && input.actor.cityId
+    ? await getActiveTeamBranch(input.actor.userId, input.actor.cityId)
+    : null;
+  if (input.actor.role === "city_manager" && !actorBranch) throw new TeamAccountDeleteError("Your account needs an active branch assignment.", 403);
 
   if (input.userId === input.actor.userId) {
     throw new TeamAccountDeleteError("You cannot delete your own account.", 403);
@@ -87,15 +118,17 @@ export async function softDeleteTeamAccount(input: {
     await client.query("BEGIN");
     transactionOpen = true;
     const result = await client.query<QueryResultRow & {
-      team_id: string; email: string; city_id: string | null; role_key: string;
+      team_id: string; email: string; city_id: string | null; role_key: string; branch_id: string | null;
     }>(`
-      SELECT u.team_id, u.email, u.city_id, role.role_key
+      SELECT u.team_id, u.email, u.city_id, role.role_key,
+        COALESCE(u.branch_id, assignment.branch_id) AS branch_id
       FROM team_members u
       JOIN roles role ON role.role_id = u.role_id
+      LEFT JOIN team_member_branch_assignments assignment ON assignment.team_id = u.team_id
       WHERE u.team_id = $1
         AND u.identity_type = 'login_account'
         AND u.deleted_at IS NULL
-      FOR UPDATE
+      FOR UPDATE OF u
     `, [input.userId]);
     const target = result.rows[0];
     if (!target) throw new TeamAccountDeleteError("This account was not found or has already been deleted.", 404);
@@ -105,6 +138,9 @@ export async function softDeleteTeamAccount(input: {
     }
     if (input.actor.role !== "super_admin" && (!input.actor.cityId || target.city_id !== input.actor.cityId)) {
       throw new TeamAccountDeleteError("You can only delete accounts in your assigned city.", 403);
+    }
+    if (input.actor.role === "city_manager" && target.branch_id !== actorBranch?.branchId) {
+      throw new TeamAccountDeleteError("You can only delete Riders assigned to your branch.", 403);
     }
     if (target.email.trim().toLowerCase() !== input.confirmedEmail.trim().toLowerCase()) {
       throw new TeamAccountDeleteError("The confirmation email does not match this account.", 400);
@@ -133,13 +169,18 @@ export async function softDeleteTeamAccount(input: {
 
 export async function updateTeamAccount(input:{userId:string;name:string;email:string;phone:string;accountStatus:TeamAccount['accountStatus'];assignedZone:string;employmentStatus:string;actor:UserSession}):Promise<TeamAccount> {
   if(input.userId===input.actor.userId || !editableRoles[input.actor.role].length) throw new TeamAccountDeleteError('You cannot edit this account.',403);
+  const actorBranch = input.actor.role === "city_manager" && input.actor.cityId
+    ? await getActiveTeamBranch(input.actor.userId, input.actor.cityId)
+    : null;
+  if (input.actor.role === "city_manager" && !actorBranch) throw new TeamAccountDeleteError("Your account needs an active branch assignment.", 403);
   const client=await getDatabasePool().connect();
   try {
     await client.query('BEGIN');
-    const {rows:[target]}=await client.query<{role_key:string;city_id:string|null}>(`SELECT r.role_key,u.city_id FROM team_members u JOIN roles r USING(role_id) WHERE u.team_id=$1 AND u.identity_type='login_account' AND u.deleted_at IS NULL FOR UPDATE OF u`,[input.userId]);
+    const {rows:[target]}=await client.query<{role_key:string;city_id:string|null;branch_id:string|null}>(`SELECT r.role_key,u.city_id,COALESCE(u.branch_id,assignment.branch_id) AS branch_id FROM team_members u JOIN roles r USING(role_id) LEFT JOIN team_member_branch_assignments assignment ON assignment.team_id=u.team_id WHERE u.team_id=$1 AND u.identity_type='login_account' AND u.deleted_at IS NULL FOR UPDATE OF u`,[input.userId]);
     if(!target) throw new TeamAccountDeleteError('This account was not found or has been removed.',404);
     const role=normalizeLoginRole(target.role_key);
     if(!role || !editableRoles[input.actor.role].includes(role as TeamRole) || (input.actor.role!=='super_admin'&&(!input.actor.cityId||target.city_id!==input.actor.cityId))) throw new TeamAccountDeleteError('You cannot edit this role or accounts outside your city.',403);
+    if(input.actor.role==='city_manager'&&target.branch_id!==actorBranch?.branchId) throw new TeamAccountDeleteError('You can only edit Riders assigned to your branch.',403);
     if(role==='rider'&&(!input.assignedZone||input.assignedZone.length>80||!['Active','Inactive'].includes(input.employmentStatus))) throw new TeamAccountDeleteError('Enter a rider zone and valid employment status.',400);
     await client.query(`UPDATE team_members SET full_name=$2,email=$3,phone=$4,account_status=$5 WHERE team_id=$1`,[input.userId,input.name,input.email,input.phone,input.accountStatus]);
     if(role==='rider') {
@@ -177,42 +218,56 @@ export async function isCurrentLoginSession(session: UserSession): Promise<boole
 export async function createTeamAccount(input: {
   name: string; email: string; phone: string; passwordHash: string; role: TeamRole;
   cityId: string; accountStatus: TeamAccount["accountStatus"];
-  assignedZone?: string; employmentStatus?: "Active" | "Inactive";
+  assignedZone?: string; employmentStatus?: "Active" | "Inactive"; branchId?: string; assignedBranch?: string; assignedByTeamId?: string;
 }): Promise<TeamAccount> {
   const pool = getDatabasePool();
-  const client = input.role === "rider" ? await pool.connect() : null;
-  const userId = `USR-${randomUUID()}`;
-  const riderId = `RID-${randomBytes(6).toString("hex")}`;
+  const client = input.role === "rider" || input.role === "city_manager" ? await pool.connect() : null;
   try {
     if (client) await client.query("BEGIN");
     const result = await (client ?? pool).query<QueryResultRow & {
       team_id: string; full_name: string; email: string; phone: string; role_key: TeamRole;
-      city_id: string; city_name: string;
+      city_id: string; city_name: string; branch_id: string | null; branch_name: string | null;
       account_status: TeamAccount["accountStatus"]; created_at: Date;
     }>(`
-      INSERT INTO team_members (team_id, full_name, email, phone, city_id, role_id, identity_type, account_status, password_hash)
-      VALUES ($1, $2, $3, $4, $5,
-        (SELECT role_id FROM roles WHERE role_key IN ($6::text, $9::text)
-         ORDER BY CASE WHEN role_key = $6::text THEN 0 ELSE 1 END LIMIT 1),
-        'login_account', $7, $8)
-      RETURNING team_id, full_name, email, phone, city_id, account_status, created_at,
-        $6::VARCHAR AS role_key,
-        (SELECT city_name FROM cities WHERE city_id = $5) AS city_name
-    `, [userId, input.name, input.email.toLowerCase(), input.phone, input.cityId, input.role, input.accountStatus, input.passwordHash,
-      input.role === 'admin' ? 'city_admin' : input.role === 'city_manager' ? 'branch_admin' : 'rider']);
+      INSERT INTO team_members (full_name, email, phone, city_id, role_id, identity_type, account_status, password_hash, assigned_branch, branch_id)
+      VALUES ($1, $2, $3, $4,
+        (SELECT role_id FROM roles WHERE role_key IN ($5::text, $8::text)
+         ORDER BY CASE WHEN role_key = $5::text THEN 0 ELSE 1 END LIMIT 1),
+        'login_account', $6, $7, $10, $9)
+      RETURNING team_id, full_name, email, phone, city_id, account_status, created_at, branch_id,
+        $5::VARCHAR AS role_key,
+        (SELECT city_name FROM cities WHERE city_id = $4) AS city_name,
+        (SELECT branch_name FROM branches WHERE branch_id = $9) AS branch_name
+    `, [input.name, input.email.toLowerCase(), input.phone, input.cityId, input.role, input.accountStatus, input.passwordHash,
+      input.role === 'admin' ? 'city_admin' : input.role === 'city_manager' ? 'branch_admin' : 'rider', input.branchId ?? null, input.assignedBranch ?? null]);
     const account = result.rows[0];
     if (!account) throw new Error("Account could not be created. Check that the selected role and city exist.");
-    if (client) {
-      await client.query(`
-        INSERT INTO riders (rider_id, team_id, employment_status, assigned_zone)
+    if (input.role === "city_manager" && !input.branchId) {
+      throw new Error("Choose a branch for this Branch Admin account.");
+    }
+    if (input.branchId) {
+      if (!input.assignedBranch || input.assignedBranch.length > 120 || !input.assignedByTeamId) {
+        throw new Error("Choose a valid branch for this Branch Admin account.");
+      }
+      await client!.query(`
+        INSERT INTO team_member_branch_assignments (team_id, city_id, branch_id, assigned_by_team_id)
         VALUES ($1, $2, $3, $4)
-      `, [riderId, userId, input.employmentStatus, input.assignedZone]);
+      `, [account.team_id, input.cityId, input.branchId, input.assignedByTeamId]);
+    }
+    if (input.role === "rider") {
+      await client!.query(`
+        INSERT INTO riders (team_id, employment_status, assigned_zone)
+        VALUES ($1, $2, $3)
+      `, [account.team_id, input.employmentStatus, input.assignedZone]);
+    }
+    if (client) {
       await client.query("COMMIT");
     }
     revalidateTag("dashboard-db-records", { expire: 0 });
     return {
       id: account.team_id, name: account.full_name, email: account.email, phone: account.phone,
       role: getTeamRoleLabel(account.role_key), cityId: account.city_id, cityName: account.city_name,
+      branchId: account.branch_id, branchName: account.branch_name,
       zone: input.role === "rider" ? input.assignedZone ?? null : null,
       accountStatus: account.account_status,
       employmentStatus: input.role === "rider" ? input.employmentStatus ?? "Active" : null,

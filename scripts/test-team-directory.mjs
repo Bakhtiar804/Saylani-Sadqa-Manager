@@ -12,8 +12,9 @@ accounts.push({...accounts[0],id:'C',name:'Branch Person',role:'Branch Admin',em
 const root=createRoot(document.getElementById('root'));
 const requests=[];
 globalThis.fetch=async(url,options)=>{requests.push([url,options.method,JSON.parse(options.body)]);return Response.json({account:{...accounts[0],name:'Updated City'}});};
+function choose(select,value){Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype,'value').set.call(select,value);select.dispatchEvent(new Event('change',{bubbles:true}));}
 try {
- await act(async()=>root.render(React.createElement(Team,{actorRole:'super_admin',initialAccounts:accounts,cities:[],assignedCity:null})));
+ await act(async()=>root.render(React.createElement(Team,{actorRole:'super_admin',initialAccounts:accounts,cities:[{city_id:'K',city_name:'Karachi',province:'Sindh'}],branches:[{branch_id:'B1',city_id:'K',branch_name:'Main Branch'}],assignedCity:null})));
  assert.equal(document.querySelectorAll('tbody tr').length,3);
  assert.ok(!document.querySelector('tbody').textContent.includes('active / Active'));
  const filter=[...document.querySelectorAll('select')].find(select=>select.parentElement.textContent.includes('Filter team role'));
@@ -29,5 +30,27 @@ try {
  assert.equal(requests[0][1],'PATCH');assert.equal(requests[0][2].name,'Updated City');assert.equal(requests[0][2].userId,'A');assert.ok(!('role' in requests[0][2]));assert.ok(document.querySelector('tbody').textContent.includes('Updated City'));
  await act(async()=>document.querySelector('[aria-label="Delete Updated City"]').click());
  assert.ok(document.querySelector('[role="dialog"]').textContent.includes('historical collections'));
- console.log('PASS role filtering, single status, role-scoped actions, PATCH payload, saved row refresh and delete confirmation');
+ await act(async()=>root.render(React.createElement(Team,{key:'city-admin-create-form',actorRole:'admin',initialAccounts:accounts,cities:[],branches:[{branch_id:'B1',city_id:'K',branch_name:'Main Branch'}],assignedCity:{cityId:'K',cityName:'Karachi'}})));
+ const createDetails=document.querySelector('details');
+ await act(async()=>createDetails.querySelector('summary').click());
+ const createForm=createDetails.querySelector('form');
+ const roleSelect=createForm.querySelector('select');
+ assert.equal(roleSelect.value,'city_manager');
+ assert.equal(createForm.querySelectorAll('select')[1].disabled,true);
+ assert.equal(createForm.querySelector('[name="branchId"]').required,true);
+ assert.ok(createForm.querySelector('[name="branchId"]').textContent.includes('Main Branch'));
+ assert.equal(createForm.querySelector('[name="assignedZone"]'),null);
+ await act(async()=>choose(roleSelect,'rider'));
+ assert.equal(createForm.querySelector('[name="branchId"]'),null);
+ assert.equal(createForm.querySelector('[name="assignedZone"]').required,true);
+ assert.equal(createForm.querySelector('[name="employmentStatus"]').required,true);
+ await act(async()=>root.render(React.createElement(Team,{key:'branch-admin-rider-create-form',actorRole:'city_manager',initialAccounts:accounts,cities:[],branches:[],assignedCity:{cityId:'K',cityName:'Karachi'},assignedBranch:{branchId:'B1',branchName:'Main Branch',cityId:'K'}})));
+ const managerDetails=document.querySelector('details');
+ await act(async()=>managerDetails.querySelector('summary').click());
+ const managerForm=managerDetails.querySelector('form');
+ const branchDisplay=[...managerForm.querySelectorAll('label')].find(label=>label.textContent.includes('Assigned branch'))?.querySelector('input');
+ assert.equal(branchDisplay.value,'Main Branch');assert.equal(branchDisplay.readOnly,true);
+ assert.equal(managerForm.querySelector('[name="assignedZone"]').required,true);
+ assert.equal(managerForm.querySelector('[name="employmentStatus"]').required,true);
+ console.log('PASS role filtering, branch-scoped Rider form, rider/branch conditional create fields, locked city scope, PATCH payload, saved row refresh and delete confirmation');
 }finally{await act(async()=>root.unmount());dom.window.close();}

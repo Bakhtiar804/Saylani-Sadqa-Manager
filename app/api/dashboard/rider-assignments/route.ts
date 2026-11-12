@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
 import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-auth";
+import { getActiveTeamBranch } from "@/lib/city-branches";
 
 const taskTypes = ["Scheduled Collection", "Box Verification", "Follow-up Visit"] as const;
 
@@ -10,6 +11,8 @@ async function handlePOST(request: Request) {
   const session = await getOperationsSession();
   if (!session) return Response.json({ error: "Sign in to assign a rider." }, { status: 401 });
   if (!['admin', 'city_manager'].includes(session.role) || !session.cityId) return Response.json({ error: "A city-scoped operational account is required." }, { status: 403 });
+  const assignedBranch = session.role === 'city_manager' ? await getActiveTeamBranch(session.userId, session.cityId) : null;
+  if (session.role === 'city_manager' && !assignedBranch) return Response.json({ error: "An active branch assignment is required." }, { status: 403 });
   if (!hasValidRequestOrigin(request)) return Response.json({ error: "Invalid request origin." }, { status: 403 });
 
   let input: unknown;
@@ -34,9 +37,11 @@ async function handlePOST(request: Request) {
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
-    const riderResult = await client.query<{ rider_id: string; city_id: string }>(`
-      SELECT rider.rider_id, account.city_id
+    const riderResult = await client.query<{ rider_id: string; city_id: string; branch_id: string | null }>(`
+      SELECT rider.rider_id, account.city_id,
+        COALESCE(account.branch_id, branch_assignment.branch_id) AS branch_id
       FROM riders rider JOIN team_members account USING (team_id)
+      LEFT JOIN team_member_branch_assignments branch_assignment ON branch_assignment.team_id = account.team_id
       WHERE rider.rider_id = $1 AND rider.employment_status = 'Active'
         AND account.account_status = 'active' AND account.deleted_at IS NULL
       FOR UPDATE OF rider
@@ -50,9 +55,16 @@ async function handlePOST(request: Request) {
       await client.query("ROLLBACK");
       return Response.json({ error: "Choose an active rider." }, { status: 400 });
     }
+    if (assignedBranch && rider.branch_id !== assignedBranch.branchId) {
+      await client.query('ROLLBACK');
+      return Response.json({ error: 'Choose an active rider assigned to your branch.' }, { status: 403 });
+    }
 
-    const boxResult = await client.query<{ box_id: string; city_id: string; box_status: string }>(`
-      SELECT box_id, city_id, box_status FROM donation_boxes WHERE box_id = $1 FOR UPDATE
+    const boxResult = await client.query<{ box_id: string; city_id: string; box_status: string; branch_id: string | null }>(`
+      SELECT box.box_id, box.city_id, box.box_status, branch_assignment.branch_id
+      FROM donation_boxes box
+      LEFT JOIN branch_box_assignments branch_assignment ON branch_assignment.box_id = box.box_id
+      WHERE box.box_id = $1 FOR UPDATE OF box
     `, [boxId]);
     const box = boxResult.rows[0];
     if (!box) {
@@ -63,16 +75,23 @@ async function handlePOST(request: Request) {
       await client.query("ROLLBACK");
       return Response.json({ error: "The selected rider and box must belong to the same city." }, { status: 400 });
     }
+    if (assignedBranch && box.branch_id !== assignedBranch.branchId) {
+      await client.query('ROLLBACK');
+      return Response.json({ error: 'Choose a donation box assigned to your branch.' }, { status: 403 });
+    }
     if (box.box_status !== "Active" && taskType === "Scheduled Collection") {
       await client.query("ROLLBACK");
       return Response.json({ error: "Collection tasks can only be assigned to active boxes." }, { status: 409 });
     }
 
-    const taskId = `TSK-${randomBytes(8).toString("hex").toUpperCase()}`;
-    await client.query(`
-      INSERT INTO rider_tasks (task_id, rider_id, box_id, task_date, task_type, task_status)
-      VALUES ($1, $2, $3, $4, $5, 'Assigned')
-    `, [taskId, riderId, boxId, taskDate, taskType]);
+    const taskResult = await client.query<{ task_id: string }>(`
+      INSERT INTO rider_tasks (rider_id, box_id, task_date, task_type, task_status, workflow_stage, workflow_events)
+      VALUES ($1, $2, $3, $4, 'Assigned', 'assigned', jsonb_build_array(jsonb_build_object(
+        'event', 'assigned', 'status', 'Assigned', 'actor_team_id', $5::text, 'at', CURRENT_TIMESTAMP
+      )))
+      RETURNING task_id
+    `, [riderId, boxId, taskDate, taskType, session.userId]);
+    const taskId = taskResult.rows[0].task_id;
     await client.query(`
       INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'rider_task', $2, 'assigned', $3, NULL, $4::jsonb)

@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
 import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-auth";
+import { getActiveTeamBranch } from "@/lib/city-branches";
 
 const decisions = ["Verified", "Flagged"] as const;
 
@@ -11,6 +12,8 @@ async function handleGET(_request: Request, context: { params: Promise<{ collect
   if (!session) return Response.json({ error: "Sign in to view collection history." }, { status: 401 });
   if (!["super_admin", "admin", "city_manager"].includes(session.role)) return Response.json({ error: "Collection review access is required." }, { status: 403 });
   if (session.role !== "super_admin" && !session.cityId) return Response.json({ error: "A city assignment is required." }, { status: 403 });
+  const branch = session.role === 'city_manager' && session.cityId ? await getActiveTeamBranch(session.userId, session.cityId) : null;
+  if (session.role === 'city_manager' && !branch) return Response.json({ error: "An active branch assignment is required." }, { status: 403 });
   const { collectionId } = await context.params;
   try {
     const result = await getDatabasePool().query<{
@@ -25,8 +28,13 @@ async function handleGET(_request: Request, context: { params: Promise<{ collect
       LEFT JOIN team_members actor ON actor.team_id = audit.actor_team_id
       WHERE collection.collection_id = $1
         AND ($2::boolean OR collection.city_id = $3)
+        AND ($4::text IS NULL OR EXISTS (
+          SELECT 1 FROM branch_box_assignments assignment
+          WHERE assignment.box_id = collection.box_id AND assignment.city_id = collection.city_id
+            AND assignment.branch_id = $4
+        ))
       ORDER BY audit.occurred_at DESC NULLS LAST
-    `, [collectionId, session.role === "super_admin", session.cityId]);
+    `, [collectionId, session.role === "super_admin", session.cityId, branch?.branchId ?? null]);
     if (result.rows.length === 0) return Response.json({ error: "This collection is not available in your scope." }, { status: 404 });
     const events = result.rows.filter((row) => row.audit_id).map((row) => ({
       id: row.audit_id, action: row.action, actorName: row.actor_name,
@@ -45,6 +53,8 @@ async function handlePATCH(request: Request, context: { params: Promise<{ collec
   if (!session) return Response.json({ error: "Sign in to review collections." }, { status: 401 });
   if (!["admin", "city_manager"].includes(session.role)) return Response.json({ error: "Your role has read-only access to collections." }, { status: 403 });
   if (session.role !== "super_admin" && !session.cityId) return Response.json({ error: "A city assignment is required." }, { status: 403 });
+  const branch = session.role === 'city_manager' && session.cityId ? await getActiveTeamBranch(session.userId, session.cityId) : null;
+  if (session.role === 'city_manager' && !branch) return Response.json({ error: "An active branch assignment is required." }, { status: 403 });
   if (!hasValidRequestOrigin(request)) return Response.json({ error: "Invalid request origin." }, { status: 403 });
 
   const { collectionId } = await context.params;
@@ -59,13 +69,23 @@ async function handlePATCH(request: Request, context: { params: Promise<{ collec
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
-    const currentResult = await client.query<{ collection_status: string; city_id: string }>(
-      "SELECT collection_status, city_id FROM collections WHERE collection_id = $1 FOR UPDATE", [collectionId],
+    const currentResult = await client.query<{ collection_status: string; city_id: string; box_id: string }>(
+      "SELECT collection_status, city_id, box_id FROM collections WHERE collection_id = $1 FOR UPDATE", [collectionId],
     );
     const current = currentResult.rows[0];
     if (!current || current.collection_status==='Voided' || (session.role !== "super_admin" && current.city_id !== session.cityId)) {
       await client.query("ROLLBACK");
       return Response.json({ error: "This collection is not available in your scope." }, { status: 404 });
+    }
+    if (branch) {
+      const branchCollection = await client.query(`
+        SELECT 1 FROM branch_box_assignments
+        WHERE box_id = $1 AND city_id = $2 AND branch_id = $3
+      `, [current.box_id, session.cityId, branch.branchId]);
+      if (branchCollection.rowCount !== 1) {
+        await client.query("ROLLBACK");
+        return Response.json({ error: "This collection is not available in your branch." }, { status: 404 });
+      }
     }
     if (current.collection_status === "Verified") {
       await client.query("ROLLBACK");

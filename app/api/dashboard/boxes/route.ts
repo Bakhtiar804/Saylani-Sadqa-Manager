@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
 import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-auth";
+import { getActiveTeamBranch } from "@/lib/city-branches";
 
 function textField(body: Record<string, unknown>, key: string, max: number): string {
   return typeof body[key] === "string" ? body[key].trim().slice(0, max) : "";
@@ -11,17 +12,18 @@ function textField(body: Record<string, unknown>, key: string, max: number): str
 async function handlePOST(request: Request) {
   const session = await getOperationsSession();
   if (!session) return Response.json({ error: "Sign in to register a box." }, { status: 401 });
-  if (session.role !== 'admin') return Response.json({ error: "Only a City Admin can register boxes in their city." }, { status: 403 });
-  if (session.role === "admin" && !session.cityId) return Response.json({ error: "A city assignment is required." }, { status: 403 });
+  if (!['admin', 'city_manager'].includes(session.role)) return Response.json({ error: "Your role cannot register donation boxes." }, { status: 403 });
+  if (!session.cityId) return Response.json({ error: "A city assignment is required." }, { status: 403 });
   if (!hasValidRequestOrigin(request)) return Response.json({ error: "Invalid request origin." }, { status: 403 });
 
   let input: unknown;
   try { input = await request.json(); } catch { return Response.json({ error: "Enter the box details." }, { status: 400 }); }
   if (typeof input !== "object" || input === null) return Response.json({ error: "Enter the box details." }, { status: 400 });
   const body = input as Record<string, unknown>;
-  const boxId = textField(body, "boxId", 16).toUpperCase();
   const qrCode = textField(body, "qrCode", 40).toUpperCase();
   const cityId = session.cityId!;
+  const branch = session.role === 'city_manager' ? await getActiveTeamBranch(session.userId, cityId) : null;
+  if (session.role === 'city_manager' && !branch) return Response.json({ error: "An active branch assignment is required." }, { status: 403 });
   const district = textField(body, "district", 100) || null;
   const area = textField(body, "area", 100);
   const locationType = textField(body, "locationType", 40);
@@ -31,7 +33,7 @@ async function handlePOST(request: Request) {
   const partnerId = textField(body, "partnerId", 16) || null;
   const custodianUserId = textField(body, "custodianUserId", 40) || null;
   const assignedRiderId = textField(body, "assignedRiderId", 16) || null;
-  if (!/^[A-Z0-9-]{3,16}$/.test(boxId) || !/^[A-Z0-9-]{3,40}$/.test(qrCode)) return Response.json({ error: "Use letters, numbers, or hyphens for the box and QR IDs." }, { status: 400 });
+  if (!/^[A-Z0-9-]{3,40}$/.test(qrCode)) return Response.json({ error: "Use letters, numbers, or hyphens for the QR code." }, { status: 400 });
   if (!cityId || !area || !locationType || !locationDescription || !securityLevel || !/^\d{4}-\d{2}-\d{2}$/.test(installationDate) || Number.isNaN(Date.parse(`${installationDate}T00:00:00Z`))) {
     return Response.json({ error: "Complete the city, location, installation date, and security fields." }, { status: 400 });
   }
@@ -42,6 +44,13 @@ async function handlePOST(request: Request) {
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
+    // Serialize generated IDs without adding a sequence or altering database schema.
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('donation-box-db-id-sequence'))");
+    const nextId = await client.query<{ next_number: number }>(`
+      SELECT COALESCE(MAX((substring(box_id from 4))::integer), 0) + 1 AS next_number
+      FROM donation_boxes WHERE box_id ~ '^DB-[0-9]+$'
+    `);
+    const boxId = `DB-${String(nextId.rows[0]?.next_number ?? 1).padStart(4, '0')}`;
     const city = await client.query("SELECT 1 FROM cities WHERE city_id = $1", [cityId]);
     if (city.rowCount !== 1) {
       await client.query("ROLLBACK");
@@ -55,17 +64,31 @@ async function handlePOST(request: Request) {
       }
     }
     if (custodianUserId) {
-      const custodian = await client.query("SELECT 1 FROM team_members WHERE team_id = $1 AND identity_type = 'field_staff' AND city_id = $2", [custodianUserId, cityId]);
+      const custodian = await client.query(`SELECT 1 FROM team_members member
+        LEFT JOIN team_member_branch_assignments assignment ON assignment.team_id = member.team_id
+        WHERE member.team_id = $1 AND member.identity_type = 'field_staff' AND member.city_id = $2
+        AND ($3::text IS NULL OR COALESCE(member.branch_id, assignment.branch_id) = $3)`, [custodianUserId, cityId, branch?.branchId ?? null]);
       if (custodian.rowCount !== 1) {
         await client.query("ROLLBACK");
         return Response.json({ error: "Choose a field custodian in the box's city." }, { status: 400 });
       }
     }
     if (assignedRiderId) {
-      const rider = await client.query("SELECT 1 FROM riders JOIN team_members USING (team_id) WHERE riders.rider_id = $1 AND team_members.city_id = $2 AND team_members.account_status = 'active' AND team_members.deleted_at IS NULL", [assignedRiderId, cityId]);
+      const rider = await client.query(`SELECT 1 FROM riders
+        JOIN team_members member USING (team_id)
+        LEFT JOIN team_member_branch_assignments assignment ON assignment.team_id = member.team_id
+        WHERE riders.rider_id = $1 AND member.city_id = $2 AND member.account_status = 'active' AND member.deleted_at IS NULL
+        AND ($3::text IS NULL OR COALESCE(member.branch_id, assignment.branch_id) = $3)`, [assignedRiderId, cityId, branch?.branchId ?? null]);
       if (rider.rowCount !== 1) {
         await client.query("ROLLBACK");
         return Response.json({ error: "Choose an active rider in the box's city." }, { status: 400 });
+      }
+    }
+    if (branch) {
+      const validBranch = await client.query("SELECT 1 FROM branches WHERE branch_id = $1 AND city_id = $2 AND status = 'active'", [branch.branchId, cityId]);
+      if (validBranch.rowCount !== 1) {
+        await client.query("ROLLBACK");
+        return Response.json({ error: "Your active branch assignment could not be verified." }, { status: 403 });
       }
     }
     await client.query(`
@@ -75,6 +98,12 @@ async function handlePOST(request: Request) {
         box_status, security_level, is_demo_record, district
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Active', $11, FALSE, $12)
     `, [boxId, qrCode, cityId, area, locationType, locationDescription, custodianUserId, partnerId, assignedRiderId, installationDate, securityLevel, district]);
+    if (branch) {
+      await client.query(`
+        INSERT INTO branch_box_assignments (box_id, city_id, branch_id, assigned_by_team_id)
+        VALUES ($1, $2, $3, $4)
+      `, [boxId, cityId, branch.branchId, session.userId]);
+    }
     await client.query(`
       INSERT INTO box_status_history (history_id, box_id, previous_status, new_status, changed_on, changed_by_team_id, reason)
       VALUES ($1, $2, 'Not Registered', 'Active', CURRENT_DATE, $3, 'Initial registration')

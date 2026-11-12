@@ -77,11 +77,11 @@ try {
 
   await isolated.query(`CREATE TABLE riders(rider_id TEXT PRIMARY KEY,team_id TEXT,assigned_zone TEXT,employment_status TEXT);
     CREATE TABLE donation_boxes(box_id TEXT PRIMARY KEY,qr_code TEXT,city_id TEXT,area TEXT,box_status TEXT,location_description TEXT,assigned_rider_id TEXT);
-    CREATE TABLE collections(collection_id TEXT PRIMARY KEY,rider_id TEXT,collection_date DATE,box_id TEXT,city_id TEXT,collection_amount_pkr NUMERIC,cash_handover_status TEXT,deposit_status TEXT);
+    CREATE TABLE collections(collection_id TEXT PRIMARY KEY,rider_id TEXT,collection_date DATE,box_id TEXT,city_id TEXT,collection_amount_pkr NUMERIC,collection_status TEXT,verified_by_team_id TEXT,verified_at TIMESTAMPTZ,cash_handover_status TEXT,deposit_status TEXT);
     CREATE TABLE rider_tasks(task_id TEXT,rider_id TEXT,task_status TEXT,task_date DATE,box_id TEXT,task_type TEXT);
     INSERT INTO riders VALUES('R1','TEST-R1','North','Active'),('R2','TEST-R2','Central','Active');
     INSERT INTO donation_boxes VALUES('B1','QR-B1','C001','Gulshan','Active','Test location','R1'),('B2','QR-B2','C002','Model Town','Active','Other city','R2');
-    INSERT INTO collections VALUES('COL1','R1','2026-10-03','B1','C001',1234,'Received','Deposited'),('COL2','R2','2026-10-03','B2','C002',999,'Received','Deposited'),('COL3','R1','2026-09-03','B1','C001',500,'Received','Deposited');
+    INSERT INTO collections VALUES('COL1','R1','2026-10-03','B1','C001',1234,'Verified','TEST-ADMIN',CURRENT_TIMESTAMP,'Received','Deposited'),('COL2','R2','2026-10-03','B2','C002',999,'Verified','TEST-ADMIN',CURRENT_TIMESTAMP,'Received','Deposited'),('COL3','R1','2026-09-03','B1','C001',500,'Pending Verification',NULL,NULL,'Received','Deposited');
     INSERT INTO rider_tasks VALUES('TASK1','R1','Assigned','2026-10-01','B1','Scheduled Collection');`);
   const riders=await getRiderDetails(actor,'2026-10');assert.equal(riders.profiles.length,1);assert.equal(riders.history.length,1);assert.equal(riders.history[0].amount_pkr,1234);assert.equal(riders.history[0].area,'Gulshan');
   const personal=await getRiderDetails({...actor,role:'rider',userId:'TEST-R1'},'2026-10');assert.equal(personal.profiles.length,1);
