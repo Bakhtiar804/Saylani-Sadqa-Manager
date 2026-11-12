@@ -118,6 +118,7 @@ const dashboardQueries = {
       LEFT JOIN team_members counter ON counter.team_id = collection.counted_by_team_id
       LEFT JOIN team_members verifier ON verifier.team_id = collection.verified_by_team_id
       LEFT JOIN team_members custodian ON custodian.team_id = collection.custodian_team_id
+      WHERE collection.collection_status <> 'Voided'
       ORDER BY collection.collection_date DESC, collection.collection_id
     `,
   riderTasks: `
@@ -416,7 +417,7 @@ export async function getCollectionExplorerPage(options: CollectionExplorerOptio
   const page = Math.max(1, Math.min(100_000, Math.floor(Number(options.page) || 1)));
   const pageSize = 10;
   const values: (string | number)[] = [];
-  const where: string[] = [];
+  const where: string[] = ["collection.collection_status <> 'Voided'"];
   const add = (value: string | number) => {
     values.push(value);
     return `$${values.length}`;
@@ -537,12 +538,12 @@ export async function getCollectionsPageData() {
       COUNT(*) FILTER (WHERE collection_status = 'Pending Verification')::int AS pending_count,
       COUNT(*) FILTER (WHERE collection_status = 'Flagged')::int AS flagged_count,
       COALESCE(SUM(collection_amount_pkr) FILTER (WHERE collection_status = 'Verified'), 0) AS verified_total
-      FROM collections`),
+      FROM collections WHERE collection_status <> 'Voided'`),
     readRows(`SELECT collection_status AS name, COUNT(*)::int AS value
-      FROM collections GROUP BY collection_status ORDER BY collection_status`),
+      FROM collections WHERE collection_status <> 'Voided' GROUP BY collection_status ORDER BY collection_status`),
     readRows(`SELECT TO_CHAR(collection_date, 'YYYY-MM') AS month,
       SUM(collection_amount_pkr) AS collections FROM collections
-      WHERE collection_status = 'Verified' GROUP BY TO_CHAR(collection_date, 'YYYY-MM') ORDER BY month`),
+      WHERE collection_status <> 'Voided' AND collection_status = 'Verified' GROUP BY TO_CHAR(collection_date, 'YYYY-MM') ORDER BY month`),
     readRows(`SELECT city.city_name AS name, COALESCE(SUM(collection.collection_amount_pkr), 0) AS value
       FROM cities city LEFT JOIN collections collection
         ON collection.city_id = city.city_id AND collection.collection_status = 'Verified'
@@ -603,7 +604,7 @@ export async function getOverviewData(
   const pool = getDatabasePool();
   const [cities, dateRows] = await Promise.all([
     getCityOptions(),
-    pool.query<{ min_date: string | null; max_date: string | null }>("SELECT MIN(collection_date)::text AS min_date, MAX(collection_date)::text AS max_date FROM collections"),
+    pool.query<{ min_date: string | null; max_date: string | null }>("SELECT MIN(collection_date)::text AS min_date, MAX(collection_date)::text AS max_date FROM collections WHERE collection_status <> 'Voided'"),
   ]);
   city = cities.some((item) => item.city_id === city) ? city : "all";
   const { startDate, endDate } = getRangeBounds(dateRows.rows[0]?.min_date ?? null, dateRows.rows[0]?.max_date ?? null, range);
@@ -623,14 +624,14 @@ export async function getOverviewData(
       COUNT(*) FILTER (WHERE collection_status = 'Flagged')::int AS flagged_count,
       COALESCE(SUM(collection_amount_pkr) FILTER (WHERE collection_status = 'Verified'), 0) AS verified_pkr,
       COALESCE(SUM(collection_amount_pkr) FILTER (WHERE collection_status = 'Pending Verification'), 0) AS pending_pkr
-      FROM collections WHERE collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR city_id = $3)
+      FROM collections WHERE collection_status <> 'Voided' AND collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR city_id = $3)
       ), daily AS (
       SELECT collection_date::text AS date, SUM(collection_amount_pkr) AS collections
-      FROM collections WHERE collection_status = 'Verified' AND collection_date BETWEEN $1 AND $2
+      FROM collections WHERE collection_status <> 'Voided' AND collection_status = 'Verified' AND collection_date BETWEEN $1 AND $2
       AND ($3 = 'all' OR city_id = $3) GROUP BY collection_date
       ), city_totals AS (
       SELECT city_id, SUM(collection_amount_pkr) AS collection FROM collections
-      WHERE collection_status = 'Verified' AND collection_date BETWEEN $1 AND $2
+      WHERE collection_status <> 'Voided' AND collection_status = 'Verified' AND collection_date BETWEEN $1 AND $2
       AND ($3 = 'all' OR city_id = $3) GROUP BY city_id
       ), boxes AS (
       SELECT COUNT(*)::int AS boxes,
@@ -651,7 +652,7 @@ export async function getOverviewData(
     `, parameters),
     readRows(`WITH recent_ids AS (
       SELECT collection_id FROM collections
-      WHERE collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR city_id = $3)
+      WHERE collection_status <> 'Voided' AND collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR city_id = $3)
       ORDER BY collection_date DESC, collection_id LIMIT 8
       )
       SELECT collection.*, city.city_name, partner.partner_name,
@@ -676,7 +677,7 @@ export async function getOverviewData(
         'wallet' AS icon,
         CASE collection.collection_status WHEN 'Verified' THEN 'green' WHEN 'Flagged' THEN 'red' ELSE 'orange' END AS tone
       FROM collections collection JOIN cities city ON city.city_id = collection.city_id
-      WHERE collection.collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR collection.city_id = $3)
+      WHERE collection.collection_status <> 'Voided' AND collection.collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR collection.city_id = $3)
       UNION ALL
       SELECT ('incident-' || incident.incident_id), incident.city_id, incident.incident_date::text,
         incident.severity || ' security incident ' || LOWER(incident.incident_status),

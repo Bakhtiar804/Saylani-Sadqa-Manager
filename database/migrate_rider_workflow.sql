@@ -1,4 +1,6 @@
 BEGIN;
+-- Historical backfill only; reset automatically when this transaction ends.
+SET LOCAL saylani.workflow_recovery='on';
 ALTER TABLE rider_tasks ADD COLUMN IF NOT EXISTS workflow_stage VARCHAR(20) NOT NULL DEFAULT 'assigned';
 ALTER TABLE rider_tasks ADD COLUMN IF NOT EXISTS workflow_events JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE collections ADD COLUMN IF NOT EXISTS cash_breakdown JSONB;

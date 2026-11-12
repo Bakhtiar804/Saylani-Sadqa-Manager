@@ -1,5 +1,27 @@
 # Sadqa Manager database guide
 
+## Enforced Rider state transitions
+
+Existing databases run `npm run migrate:rider-workflow-guards` after the workflow
+and notification migrations. Fresh `schema.sql` includes the same guards.
+Scheduled collections cannot jump to completion or insert real cash without an
+assigned task at counting stage, denomination counts matching the amount, and a
+field visit before task completion. Notification reads cannot complete tasks.
+
+`recover-invalid-rider-tasks.mts` is a narrowly scoped maintenance tool for
+Rider-reported departure-side-effect records. It defaults to a rolled-back dry
+run. It refuses counted, linked, reviewed or settled collections. Applying it
+retains the original row and amount as Voided, preserves full before/after audit,
+and restores the task. Voided amounts are excluded from operational totals.
+
+## Rider notifications
+
+Run `npm run migrate:rider-notifications` for an existing database. Task rows
+store `notification_read_at` and `notification_created_at`; new assignments
+default to unread. Existing task assignment timestamps remain unknown rather
+than being invented. The Rider-scoped notification API returns open tasks only,
+and opening the bell saves read status for that authenticated Rider's tasks.
+
 ## Rider collection workflow
 
 Run `npm run migrate:rider-workflow` against an existing database before deploying

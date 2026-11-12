@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
 import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-auth";
-import { canAdvanceCollection } from '@/lib/rider-workflow';
+import { canAdvanceCollection, getCollectionStage } from '@/lib/rider-workflow';
 
 const taskStatuses = ["In Progress", "Skipped", "Completed"] as const;
 
@@ -36,8 +36,10 @@ async function handlePATCH(request: Request, context: { params: Promise<{ taskId
     }
     if (['Completed','Cancelled'].includes(current.task_status)) {
       await client.query("ROLLBACK");
-      return Response.json({ error: "Closed tasks cannot be changed." }, { status: 409 });
+      revalidateTag('dashboard-db-records',{expire:0});
+      return Response.json({ error: "This task is already closed. Its latest status is now shown.",status:current.task_status,stage:getCollectionStage(current.task_status,current.workflow_stage) }, { status: 409 });
     }
+    current.workflow_stage=getCollectionStage(current.task_status,current.workflow_stage);
     const status = ('status' in body ? body.status : 'In Progress') as typeof taskStatuses[number];
     const stage = 'stage' in body ? body.stage : undefined;
     let nextStage = current.workflow_stage;
@@ -46,7 +48,8 @@ async function handlePATCH(request: Request, context: { params: Promise<{ taskId
       const target = stage ?? (resuming ? current.workflow_stage : current.workflow_stage === 'assigned' ? 'departed' : current.workflow_stage);
       if (status !== 'In Progress' || (current.task_status === 'Skipped' && !resuming) || (!resuming && !canAdvanceCollection(current.workflow_stage, String(target)))) {
         await client.query('ROLLBACK');
-        return Response.json({error:'Complete the current step before moving to the next step.'},{status:409});
+        revalidateTag('dashboard-db-records',{expire:0});
+        return Response.json({error:'Task progress has changed. Its latest step is now shown.',status:current.task_status,stage:current.workflow_stage},{status:409});
       }
       nextStage = String(target);
     }
@@ -69,6 +72,9 @@ async function handlePATCH(request: Request, context: { params: Promise<{ taskId
     return Response.json({ taskId, status, stage: nextStage }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
+    if(error && typeof error==='object' && 'code' in error && error.code==='23514') {
+      return Response.json({error:'The task update was blocked because a collection step was skipped. Refresh the task and continue in order.'},{status:409});
+    }
     console.error("Could not update rider task.", error);
     return Response.json({ error: "The task could not be updated." }, { status: 503 });
   } finally { client.release(); }

@@ -25,6 +25,24 @@ statuses display once; differing employment status has an explicit label.
 
 ## Individual operational records
 
+Departure and cash submission use separate client actions. Only the confirmed
+denomination form can POST a collection. Database guards also reject skipped
+steps, uncounted cash inserts and completion without a matching task-linked
+collection and field visit. An unexpected completion response to a departure
+action is rejected by the client. Voided recovery records remain audited and
+are excluded from collection registers, personal totals and district rankings.
+
+Rider profile data uses the authenticated account's `team_id` for profile,
+collections and tasks. Assigned boxes are limited to that Rider, including
+when another Rider belongs to the same city. Personal history remains available
+after a city transfer. Rider profiles display personal totals and area breakdowns,
+without the administrative Rider comparison chart.
+
+The Rider top bar includes a task notification bell. The unread badge refreshes
+every 30 seconds while visible, on window focus, and when opened. Opening the
+panel saves the displayed notifications as read in the database. Each item links
+to its assigned task; the API refuses other Riders' notification updates.
+
 Network Tree's city inventory link preserves its city, year, channel and source
 snapshot month. Inventory first shows reported monthly box counts/source rows
 from the same imported DB records, then individual registered boxes and history.

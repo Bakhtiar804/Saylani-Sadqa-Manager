@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Brand } from "@/components/landing/brand";
 import Icon from "./icons";
+import RiderNotifications from './rider-notifications';
 
 const roleLabels: Record<string, string> = {
   super_admin: "Super Admin",
@@ -24,6 +25,7 @@ export default function Topbar({ userRole }: { userRole: string }) {
         </span>
       </div>
       <div className="flex items-center gap-3 max-[600px]:gap-2">
+        {userRole==='rider'&&<RiderNotifications/>}
         <span className="rounded-full border border-[#dce8dc] bg-[#f5faf2] px-3 py-1.5 text-xs font-semibold text-[#276431] max-[600px]:hidden">
           MONTHLY REPORTS
         </span>

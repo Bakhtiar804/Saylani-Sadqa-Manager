@@ -1,5 +1,63 @@
 # Project flow verification — 11 November 2026
 
+## Departure-only task completion fix — 12 November 2026
+
+The earlier cache-only mitigation did not repair the invalid completion records.
+The reported tasks contained legacy direct Assigned → Completed state changes,
+without task-linked denomination counts or cash-count visits. The original
+writer was not identifiable from the current source, database functions or
+triggers; the final fix therefore enforces the workflow in the database as well
+as the API/client.
+
+- Progress and cash submission now use distinct typed client actions. Every
+  progress button has `type="button"`; only the confirmed cash form submits cash.
+  A completion response to a departure action is rejected.
+- Database guards reject skipped steps, raw real-money inserts, mismatched
+  denominations and completion without a linked collection and field visit.
+- Both reported invalid tasks were restored with full before/after audit.
+  Their unconfirmed, uncounted cash side effects remain preserved as Voided;
+  original amounts were not changed and are excluded from operational totals.
+- Replayed the requested departure action on both real affected tasks: each
+  became In Progress / departed (On the way), completion time remained NULL,
+  and collection row counts did not increase. Both tasks are now On the way.
+- Production build, TypeScript, targeted ESLint, Rider UI regressions and
+  isolated database guard/privacy tests passed. All 193 isolated full-flow
+  HTTP checks passed with guards enabled, including cash counting/submission,
+  duplicate prevention, reviews, all role pages and Excel import.
+
+## Rider task stale-status recovery — 12 November 2026
+
+- The affected live task was already Completed while the browser displayed
+  Assigned. Its legacy workflow label was `completed`; a collection also existed
+  for the same Rider, box and date. No task or cash records were reopened/changed.
+- Rider operational queries now read fresh on each request. Successful mutations
+  immediately update the displayed step; conflict responses include current state
+  and refresh stale cards instead of leaving obsolete actions visible.
+- Completed tasks with legacy workflow labels render the submitted step.
+- Production build, TypeScript, targeted ESLint, cash validation and Rider UI
+  regression tests passed, including stale closed and advanced-task responses.
+- A live authenticated check confirmed the affected card displays Completed with
+  no departure button. An invalid-stage conflict probe returned Completed/submitted
+  without modifying task or collection records.
+
+## Rider privacy and task notification bell — 12 November 2026
+
+- Production build and targeted TypeScript/ESLint checks passed.
+- 193 isolated production-build HTTP checks passed, including notification
+  authentication, Rider-only access, foreign-task denial, origin validation,
+  persistent read state, the collection workflow and all role pages.
+- Dedicated database tests verified personal profile/history/task/box isolation
+  between Riders in the same city and in different cities, TEM-style account IDs,
+  month filtering, missing-identity denial and preserved administrative scopes.
+  A Rider retains their own historical collections after a city transfer.
+- Notification database tests verified new-task unread counts, idempotent read
+  updates and transaction rollback when a batch contains another Rider's task.
+- Notification UI tests passed hydration, badge/popup, task links, read requests,
+  keyboard closing, new-task refresh and network failure/retry handling.
+- Notification columns were added to the connected database. Test fixtures ran
+  in temporary schemas and were removed; live account/collection/report records
+  were preserved.
+
 ## Rider collection workflow — 12 November 2026
 
 - Production build and TypeScript checks passed; targeted ESLint checks passed.

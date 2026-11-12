@@ -1,9 +1,7 @@
 import "server-only";
 
-import { cacheLife, cacheTag } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { DASHBOARD_DATA_CACHE_TAG } from "@/lib/dashboard-data";
 import { getDatabasePool } from "@/lib/db";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 import { normalizeRecordRows } from './record-values';
@@ -32,10 +30,7 @@ export async function getRiderSession() {
 }
 
 export async function getRiderDashboard(userId: string) {
-  "use cache";
-  cacheLife({ stale: 5, revalidate: 10, expire: 60 });
-  cacheTag(DASHBOARD_DATA_CACHE_TAG);
-
+  // Operational task state must be read fresh for each request.
   const pool = getDatabasePool();
   const profileResult = await pool.query<RiderProfile>(`
     SELECT rider.rider_id, user_record.team_id, user_record.full_name,
@@ -67,8 +62,7 @@ export async function getRiderDashboard(userId: string) {
       SELECT collection_id, collection_date, collection_time, box_id,
         collection_amount_pkr, collection_status, cash_handover_status,
         deposit_status, discrepancy_amount_pkr, notes, cash_breakdown::text, rider_task_id
-      FROM collections
-      WHERE rider_id = $1
+      FROM collections WHERE collection_status <> 'Voided' AND rider_id = $1
       ORDER BY collection_date DESC, collection_id DESC
       LIMIT 100
     `, [profile.rider_id]),
@@ -76,8 +70,7 @@ export async function getRiderDashboard(userId: string) {
       SELECT field_collection_id, collection_date, collection_time, box_id,
         area, location_type, total_cash_counted_pkr, collection_status,
         cash_handover_status, deposit_status, discrepancy_amount_pkr, remarks
-      FROM field_collection_logs
-      WHERE rider_id = $1
+      FROM field_collection_logs WHERE collection_status IS DISTINCT FROM 'Voided' AND rider_id = $1
       ORDER BY collection_date DESC, field_collection_id DESC
       LIMIT 100
     `, [profile.rider_id]),
@@ -87,8 +80,8 @@ export async function getRiderDashboard(userId: string) {
         (SELECT COUNT(*)::int FROM rider_tasks WHERE rider_id = $1 AND task_status = 'Completed') AS completed_tasks,
         (SELECT COUNT(*)::int FROM rider_tasks WHERE rider_id = $1 AND task_status IN ('Assigned', 'In Progress')) AS open_tasks,
         (SELECT COUNT(*)::int FROM donation_boxes WHERE assigned_rider_id = $1 AND box_status = 'Active') AS active_boxes,
-        (SELECT COUNT(*)::int FROM collections WHERE rider_id = $1) AS collection_count,
-        (SELECT COALESCE(SUM(collection_amount_pkr), 0) FROM collections WHERE rider_id = $1) AS verified_total
+        (SELECT COUNT(*)::int FROM collections WHERE collection_status <> 'Voided' AND rider_id = $1) AS collection_count,
+        (SELECT COALESCE(SUM(collection_amount_pkr), 0) FROM collections WHERE collection_status <> 'Voided' AND rider_id = $1) AS verified_total
     `, [profile.rider_id]),
   ]);
   const summary = summaryResult.rows[0] ?? {};

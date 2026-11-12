@@ -22,6 +22,12 @@ export const COLLECTION_STEPS = [
 ] as const;
 export type CollectionStage = typeof COLLECTION_STEPS[number]['key'];
 
+export function getCollectionStage(status: string, stage: unknown): CollectionStage {
+  if (status === 'Completed') return 'submitted';
+  const known=COLLECTION_STEPS.slice(0,-1).find(step=>step.key===stage);
+  return known?.key ?? (status==='In Progress'?'departed':'assigned');
+}
+
 export function countCash(input: unknown) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Enter the quantity of each coin and note.');
   const entries = Object.entries(input);

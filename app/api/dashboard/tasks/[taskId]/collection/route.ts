@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
 import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-auth";
-import { countCash } from '@/lib/rider-workflow';
+import { countCash, getCollectionStage } from '@/lib/rider-workflow';
 
 async function handlePOST(request: Request, context: { params: Promise<{ taskId: string }> }) {
   const session = await getOperationsSession();
@@ -43,7 +43,8 @@ async function handlePOST(request: Request, context: { params: Promise<{ taskId:
     }
     if (task.task_status !== 'In Progress' || task.workflow_stage !== 'counting' || task.task_type!=='Scheduled Collection') {
       await client.query("ROLLBACK");
-      return Response.json({ error: "Mark departure, arrival and cash counting before submitting this collection. Resume skipped tasks first." }, { status: 409 });
+      revalidateTag('dashboard-db-records',{expire:0});
+      return Response.json({ error: "Task progress has changed. Check the latest step before submitting.",status:task.task_status,stage:getCollectionStage(task.task_status,task.workflow_stage) }, { status: 409 });
     }
     if (task.box_status !== "Active") {
       await client.query("ROLLBACK");
@@ -54,10 +55,12 @@ async function handlePOST(request: Request, context: { params: Promise<{ taskId:
     await client.query(`
       INSERT INTO collections (
         collection_id, box_id, rider_id, city_id, partner_id, collection_date, collection_time,
-        collection_amount_pkr, collection_status, recorded_by_team_id, notes, is_demo_record
-      ) VALUES ($1, $2, $3, $4, $5, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::date, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time, $6, 'Pending Verification', $7, $8, FALSE)
-    `, [collectionId, task.box_id, task.rider_id, task.city_id, task.partner_id, amount, session.userId, notes || null]);
-    await client.query(`UPDATE collections SET cash_breakdown=$2::jsonb,rider_task_id=$3,cash_notes_pkr=$4,cash_coins_pkr=$5,other_cash_pkr=0,cash_total_counted_pkr=$6,counted_by_team_id=$7,cash_handover_status='Pending',deposit_status='Pending' WHERE collection_id=$1`,[collectionId,JSON.stringify(cash.counts),taskId,cash.notes,cash.coins,amount,session.userId]);
+        collection_amount_pkr, collection_status, recorded_by_team_id, notes, is_demo_record,
+        cash_breakdown,rider_task_id,cash_notes_pkr,cash_coins_pkr,other_cash_pkr,cash_total_counted_pkr,
+        counted_by_team_id,cash_handover_status,deposit_status
+      ) VALUES ($1, $2, $3, $4, $5, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::date, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time, $6, 'Pending Verification', $7::text, $8, FALSE,
+        $9::jsonb,$10,$11,$12,0,$6,$7::text,'Pending','Pending')
+    `, [collectionId, task.box_id, task.rider_id, task.city_id, task.partner_id, amount, session.userId, notes || null,JSON.stringify(cash.counts),taskId,cash.notes,cash.coins]);
     await client.query(`INSERT INTO field_collection_logs(field_collection_id,collection_date,collection_time,box_id,city_id,rider_id,task_id,box_status_at_visit,cash_notes_pkr,cash_coins_pkr,other_cash_pkr,total_cash_counted_pkr,counted_by_team_id,collection_status,cash_handover_status,deposit_status,remarks,created_at,is_demo_record,area,location_type,full_location_description,partner_id)
       SELECT $1::text,(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::date,(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time,$2::text,$3::text,$4::text,$5::text,$6::text,$7::numeric,$8::numeric,0,$9::numeric,$10::text,'Pending Verification','Pending','Pending',$11::text,CURRENT_TIMESTAMP,FALSE,box.area,box.location_type,box.location_description,box.partner_id FROM donation_boxes box WHERE box.box_id=$2::text`,[`FLD-${randomBytes(8).toString('hex').toUpperCase()}`,task.box_id,task.city_id,task.rider_id,taskId,task.box_status,cash.notes,cash.coins,amount,session.userId,notes||null]);
     await client.query(`UPDATE rider_tasks SET task_status = 'Completed',workflow_stage='submitted',workflow_events=workflow_events || jsonb_build_array(jsonb_build_object('stage','submitted','at',CURRENT_TIMESTAMP,'collectionId',$2::text)), completion_time = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::time WHERE task_id = $1`, [taskId,collectionId]);
@@ -70,6 +73,9 @@ async function handlePOST(request: Request, context: { params: Promise<{ taskId:
     return Response.json({ collectionId, amount, status: "Pending Verification" }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
+    if(error && typeof error==='object' && 'code' in error && error.code==='23514') {
+      return Response.json({error:'Collection was not confirmed. Complete departure, arrival and cash counting before submitting.'},{status:409});
+    }
     console.error("Could not save rider collection.", error);
     return Response.json({ error: "The collection could not be saved." }, { status: 503 });
   } finally { client.release(); }

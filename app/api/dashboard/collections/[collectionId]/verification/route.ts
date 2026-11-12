@@ -63,7 +63,7 @@ async function handlePATCH(request: Request, context: { params: Promise<{ collec
       "SELECT collection_status, city_id FROM collections WHERE collection_id = $1 FOR UPDATE", [collectionId],
     );
     const current = currentResult.rows[0];
-    if (!current || (session.role !== "super_admin" && current.city_id !== session.cityId)) {
+    if (!current || current.collection_status==='Voided' || (session.role !== "super_admin" && current.city_id !== session.cityId)) {
       await client.query("ROLLBACK");
       return Response.json({ error: "This collection is not available in your scope." }, { status: 404 });
     }
