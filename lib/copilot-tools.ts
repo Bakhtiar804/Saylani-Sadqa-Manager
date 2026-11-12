@@ -89,6 +89,13 @@ export function createCopilotTools(session: UserSession) {
           totals: data.totals,
           monthly: data.monthly,
           byCity: data.byCity,
+          categories: data.categories,
+          visuals: {
+            trend: data.monthly.length > 1 ? { type: "line", title: "Monthly collection trend", xLabel: "Month", yLabel: "PKR collected", seriesLabel: "Total collections" } : null,
+            channels: data.monthly.some((row) => Number(row.public) > 0 || Number(row.branch) > 0) ? { type: "line", title: "Public vs branch collections", xLabel: "Month", yLabel: "PKR collected" } : null,
+            cities: data.byCity.length > 1 ? { type: "bar", title: "Collections by city", xLabel: "City", yLabel: "PKR collected" } : null,
+            expenses: data.categories.length > 1 ? { type: "donut", title: "Expenses by category", label: "PKR expenses" } : null,
+          },
           source: data.source,
           limitations: [
             "Monthly workbook totals are source reports, not individual rider collections.",
@@ -115,7 +122,18 @@ export function createCopilotTools(session: UserSession) {
           LEFT JOIN collections c ON c.rider_id = r.rider_id${dateFilter}
           WHERE r.team_id = $1
         `, parameters);
-        return { kind: "summary", title: "My rider statistics", period: year === "all" ? "All available records" : year, ...result.rows[0], source: "riders, rider_tasks, collections" };
+        return {
+          kind: "rider_summary",
+          title: "My rider statistics",
+          period: year === "all" ? "All available records" : year,
+          totals: {
+            tasks: Number(result.rows[0]?.task_count ?? 0),
+            completedTasks: Number(result.rows[0]?.completed_tasks ?? 0),
+            collections: Number(result.rows[0]?.collection_count ?? 0),
+            collectionTotal: Number(result.rows[0]?.collection_total ?? 0),
+          },
+          source: "riders, rider_tasks, collections",
+        };
       },
     }),
   };

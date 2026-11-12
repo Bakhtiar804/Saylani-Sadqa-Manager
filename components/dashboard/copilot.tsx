@@ -7,6 +7,7 @@ import { useChat } from "@ai-sdk/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Brand } from "@/components/landing/brand";
+import { BreakdownBarChart, ChannelComparisonChart, CollectionTrendChart, MoneyDonutChart } from "@/components/dashboard/charts";
 
 type Thread = { id: string; title: string; updatedAt: string };
 type ChatPart = { type?: string; text?: string; output?: unknown };
@@ -26,11 +27,19 @@ function formatPKR(value: unknown) {
 
 function SummaryVisual({ output }: { output: unknown }) {
   if (!output || typeof output !== "object") return null;
-  const value = output as { kind?: string; title?: string; totals?: Record<string, unknown>; monthly?: Array<Record<string, unknown>>; byCity?: Array<{ name: string; value: number | null }> };
+  const value = output as { kind?: string; title?: string; period?: string; source?: { name?: string } | string | null; totals?: Record<string, unknown>; monthly?: Array<Record<string, unknown>>; byCity?: Array<{ name: string; value: number | null }>; categories?: Array<{ name: string; value: number | null }>; visuals?: { trend?: { title?: string; xLabel?: string; yLabel?: string } | null; channels?: { title?: string; xLabel?: string; yLabel?: string } | null; cities?: { title?: string; xLabel?: string; yLabel?: string } | null; expenses?: { title?: string; label?: string } | null } };
+  if (value.kind === "rider_summary") {
+    return <div className="mt-4 grid grid-cols-2 gap-2 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[0_8px_24px_rgba(25,45,33,.04)] sm:grid-cols-4"><div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3"><span className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted-foreground)]">Tasks</span><b className="mt-1 block text-lg text-[var(--primary)]">{Number(value.totals?.tasks ?? 0).toLocaleString("en-PK")}</b></div><div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3"><span className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted-foreground)]">Completed</span><b className="mt-1 block text-lg text-[var(--primary)]">{Number(value.totals?.completedTasks ?? 0).toLocaleString("en-PK")}</b></div><div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3"><span className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted-foreground)]">Collections</span><b className="mt-1 block text-lg text-[var(--primary)]">{Number(value.totals?.collections ?? 0).toLocaleString("en-PK")}</b></div><div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3"><span className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted-foreground)]">Collected</span><b className="mt-1 block text-sm text-[var(--primary)]">{formatPKR(value.totals?.collectionTotal)}</b></div></div>;
+  }
   if (value.kind !== "summary") return null;
-  const monthly = value.monthly?.filter((row) => Number(row.collections) > 0).slice(-8) ?? [];
-  const byCity = value.byCity?.filter((row) => Number(row.value) > 0).slice(0, 6) ?? [];
-  const max = Math.max(...monthly.map((row) => Number(row.collections)), 1);
+  const monthly = value.monthly?.filter((row) => Number(row.collections) > 0).slice(-12) ?? [];
+  const byCity = value.byCity?.filter((row) => Number(row.value) > 0).slice(0, 8) ?? [];
+  const categories = value.categories?.filter((row) => Number(row.value) > 0).sort((a, b) => Number(b.value) - Number(a.value)).slice(0, 8) ?? [];
+  const trend = monthly.map((row) => ({ label: String(row.month), collections: Number(row.collections ?? 0) }));
+  const channels = monthly.map((row) => ({ month: String(row.month), public: Number(row.public ?? 0), branch: Number(row.branch ?? 0) }));
+  const cities = byCity.map((row) => ({ name: String(row.name), value: Number(row.value ?? 0) }));
+  const expenseData = categories.map((row) => ({ name: String(row.name), value: Number(row.value ?? 0) }));
+  const visualTitle = (fallback: string, configured?: string) => configured || fallback;
   return (
     <div className="mt-4 grid min-w-0 gap-3 overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[0_8px_24px_rgba(25,45,33,.04)]">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -39,8 +48,11 @@ function SummaryVisual({ output }: { output: unknown }) {
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3"><span className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted-foreground)]">Branch</span><b className="mt-1 block text-sm text-[var(--primary)]">{formatPKR(value.totals?.branch)}</b></div>
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3"><span className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted-foreground)]">Expenses</span><b className="mt-1 block text-sm text-[var(--primary)]">{formatPKR(value.totals?.expenses)}</b></div>
       </div>
-      {monthly.length > 0 && <div><p className="mb-2 text-xs font-bold text-[#36513d]">Monthly collection trend</p><div className="flex h-28 items-end gap-2">{monthly.map((row) => <div key={String(row.month)} className="flex min-w-0 flex-1 flex-col items-center gap-1"><div className="w-full rounded-t-md bg-[#61bb46]" style={{ height: `${Math.max(8, (Number(row.collections) / max) * 88)}px` }} title={formatPKR(row.collections)} /><span className="truncate text-[9px] text-[#718073]">{String(row.month).slice(5)}</span></div>)}</div></div>}
-      {byCity.length > 1 && <div><p className="mb-2 text-xs font-bold text-[#36513d]">Top cities</p><div className="grid gap-2">{byCity.map((row) => { const width = Math.max(8, (Number(row.value) / Number(byCity[0].value || 1)) * 100); return <div key={row.name} className="grid grid-cols-[90px_1fr_auto] items-center gap-2 text-[10px]"><span className="truncate text-[#536657]">{row.name}</span><div className="h-2 rounded-full bg-[#e6f0e1]"><div className="h-2 rounded-full bg-[#d4a63b]" style={{ width: `${width}%` }} /></div><span className="text-[#36513d]">{formatPKR(row.value)}</span></div>; })}</div></div>}
+      {monthly.length > 1 && <section className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3"><p className="mb-1 text-xs font-bold text-[#36513d]">{visualTitle("Monthly collection trend", value.visuals?.trend?.title)}</p><p className="mb-2 text-[10px] text-[var(--muted-foreground)]">{value.visuals?.trend?.yLabel || "PKR collected"} by {value.visuals?.trend?.xLabel || "month"}</p><CollectionTrendChart data={trend} height={220} seriesLabel="Total collections" /></section>}
+      {monthly.length > 1 && channels.some((row) => row.public > 0 || row.branch > 0) && <section className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3"><p className="mb-1 text-xs font-bold text-[#36513d]">{visualTitle("Public vs branch collections", value.visuals?.channels?.title)}</p><p className="mb-2 text-[10px] text-[var(--muted-foreground)]">PKR collected by month · legend shows channel</p><ChannelComparisonChart data={channels} /></section>}
+      {byCity.length > 1 && <section className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3"><p className="mb-1 text-xs font-bold text-[#36513d]">{visualTitle("Collections by city", value.visuals?.cities?.title)}</p><p className="mb-2 text-[10px] text-[var(--muted-foreground)]">PKR collected by city</p><BreakdownBarChart data={cities} valueFormat="currency" horizontal height={Math.max(220, cities.length * 42)} /></section>}
+      {categories.length > 1 && <section className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3"><p className="mb-1 text-xs font-bold text-[#36513d]">{visualTitle("Expenses by category", value.visuals?.expenses?.title)}</p><p className="mb-2 text-[10px] text-[var(--muted-foreground)]">{value.visuals?.expenses?.label || "PKR expenses"}</p><MoneyDonutChart data={expenseData} centerLabel="Expenses" /></section>}
+      {(value.source || value.period) && <p className="text-[10px] text-[var(--muted-foreground)]">Scope: {value.period || "available records"}{value.source ? ` · Source: ${typeof value.source === "string" ? value.source : value.source.name || "permitted reports"}` : ""}</p>}
     </div>
   );
 }
