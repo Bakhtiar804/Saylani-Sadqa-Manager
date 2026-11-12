@@ -1,5 +1,7 @@
-import { createTeamAccount, isActiveLoginAccount } from "@/lib/admin-accounts";
+import { withApiErrors } from '@/lib/api-errors';
+import { createTeamAccount, isCurrentLoginSession } from "@/lib/admin-accounts";
 import { hashPassword } from "@/lib/auth";
+import { getDatabasePool } from "@/lib/db";
 import { hasValidRequestOrigin } from "@/lib/operations-auth";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 import { cookies } from "next/headers";
@@ -27,12 +29,12 @@ function isAdminInput(value: unknown): value is AdminInput {
   );
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const cookieStore = await cookies();
   const session = verifyUserSession(
     cookieStore.get(SESSION_COOKIE_NAME)?.value,
   );
-  if (!session || !await isActiveLoginAccount(session.userId) || session.role !== "super_admin") {
+  if (!session || !await isCurrentLoginSession(session) || session.role !== "super_admin") {
     return Response.json({ error: "Super-admin access is required." }, { status: 403 });
   }
 
@@ -48,7 +50,7 @@ export async function POST(request: Request) {
   }
 
   if (!isAdminInput(input)) {
-    return Response.json({ error: "Enter the admin name, phone, email, city, and password." }, { status: 400 });
+    return Response.json({ error: "Enter the City Admin name, phone, email, city, and password." }, { status: 400 });
   }
 
   const name = input.name.trim();
@@ -71,9 +73,12 @@ export async function POST(request: Request) {
   if (!cityId || cityId.length > 16) {
     return Response.json({ error: "Choose a valid city." }, { status: 400 });
   }
+  if (!(await getDatabasePool().query('SELECT 1 FROM cities WHERE city_id=$1',[cityId])).rowCount) {
+    return Response.json({ error: "Choose a valid city." }, { status: 400 });
+  }
   if (input.password.length < 12 || input.password.length > 1024) {
     return Response.json(
-      { error: "Admin passwords must be at least 12 characters." },
+      { error: "City Admin passwords must be at least 12 characters." },
       { status: 400 },
     );
   }
@@ -101,15 +106,17 @@ export async function POST(request: Request) {
       error.code === "23505"
     ) {
       return Response.json(
-        { error: "An admin with this email already exists." },
+        { error: "A City Admin with this email already exists." },
         { status: 409 },
       );
     }
 
-    console.error("Could not create admin account.", error);
+    console.error("Could not create City Admin account.", error);
     return Response.json(
-      { error: "Could not save the admin account. Check the server logs." },
+      { error: "Could not save the City Admin account. Check the server logs." },
       { status: 503 },
     );
   }
 }
+
+export const POST = withApiErrors(handlePOST);

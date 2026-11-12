@@ -1,26 +1,24 @@
-import { createTeamAccount, isActiveLoginAccount, listTeamAccounts, softDeleteTeamAccount, TeamAccountDeleteError, type TeamRole } from "@/lib/admin-accounts";
+import { withApiErrors } from '@/lib/api-errors';
+import { createTeamAccount, updateTeamAccount, isCurrentLoginSession, listTeamAccounts, softDeleteTeamAccount, TeamAccountDeleteError, type TeamRole } from "@/lib/admin-accounts";
 import { hashPassword } from "@/lib/auth";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 import { getDatabasePool } from "@/lib/db";
 import { hasValidRequestOrigin } from "@/lib/operations-auth";
 import { cookies } from "next/headers";
+import { creatableRoles, deletableRoles, editableRoles } from '@/lib/permissions';
 
-const allowedRoles: Record<string, readonly TeamRole[]> = {
-  super_admin: ["admin", "city_manager", "rider"],
-  admin: ["city_manager", "rider"],
-  city_manager: ["rider"],
-};
+const allowedRoles = creatableRoles;
 
 async function getSession() {
   const cookieStore = await cookies();
   const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
-  if (!session || !await isActiveLoginAccount(session.userId)) return null;
+  if (!session || !await isCurrentLoginSession(session)) return null;
   return session;
 }
 
-export async function DELETE(request: Request) {
+async function handleDELETE(request: Request) {
   const session = await getSession();
-  if (!session || !allowedRoles[session.role]) {
+  if (!session || !deletableRoles[session.role].length) {
     return Response.json({ error: "Team management access is required." }, { status: 403 });
   }
   if (!hasValidRequestOrigin(request)) {
@@ -47,9 +45,9 @@ export async function DELETE(request: Request) {
   }
 }
 
-export async function GET() {
+async function handleGET() {
   const session = await getSession();
-  if (!session || !allowedRoles[session.role]) {
+  if (!session || !allowedRoles[session.role].length) {
     return Response.json({ error: "Team management access is required." }, { status: 403 });
   }
   try {
@@ -61,9 +59,9 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const session = await getSession();
-  if (!session || !allowedRoles[session.role]) {
+  if (!session || !allowedRoles[session.role].length) {
     return Response.json({ error: "Team management access is required." }, { status: 403 });
   }
   if (!hasValidRequestOrigin(request)) {
@@ -103,7 +101,7 @@ export async function POST(request: Request) {
   if (password.length < 12 || password.length > 1024) {
     return Response.json({ error: "Passwords must be between 12 and 1024 characters." }, { status: 400 });
   }
-  const cityId = session.role === "super_admin" || session.role === "admin"
+  const cityId = session.role === "super_admin"
     ? (typeof requestedCity === "string" ? requestedCity.trim() : "")
     : session.cityId ?? "";
   if (!cityId) return Response.json({ error: "Select or assign a city before creating this account." }, { status: 400 });
@@ -139,3 +137,26 @@ export async function POST(request: Request) {
     return Response.json({ error: "Could not save the account. Check the server logs." }, { status: 503 });
   }
 }
+
+export const DELETE = withApiErrors(handleDELETE);
+export const PATCH = withApiErrors(async(request:Request)=>{
+  const session=await getSession();
+  if(!session||!editableRoles[session.role].length) return Response.json({error:'Team management access is required.'},{status:403});
+  if(!hasValidRequestOrigin(request)) return Response.json({error:'Invalid request origin.'},{status:403});
+  let body:Record<string,unknown>;
+  try {const input=await request.json();if(!input||typeof input!=='object'||Array.isArray(input)) throw new Error();body=input;} catch {return Response.json({error:'Enter valid account details.'},{status:400});}
+  const text=(key:string)=>typeof body[key]==='string'?(body[key] as string).trim():'';
+  const userId=text('userId'),name=text('name'),email=text('email').toLowerCase(),phone=text('phone'),accountStatus=text('accountStatus');
+  if(!userId||name.length<2||name.length>120||email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||phone.length>32||!/^\+?[\d\s().-]{6,31}$/.test(phone)||phone.replace(/\D/g,'').length<7||phone.replace(/\D/g,'').length>15||!['active','inactive','suspended'].includes(accountStatus)) return Response.json({error:'Enter a valid name, email, phone (7–15 digits), and account status.'},{status:400});
+  if(['role','cityId','password','passwordHash'].some(key=>key in body)) return Response.json({error:'Role, city and password cannot be changed through this form.'},{status:400});
+  try {
+    const account=await updateTeamAccount({userId,name,email,phone,accountStatus:accountStatus as 'active'|'inactive'|'suspended',assignedZone:text('assignedZone'),employmentStatus:text('employmentStatus'),actor:session});
+    return Response.json({account},{headers:{'Cache-Control':'no-store'}});
+  }catch(error){
+    if(error instanceof TeamAccountDeleteError) return Response.json({error:error.message},{status:error.status});
+    if(typeof error==='object'&&error!==null&&'code' in error&&error.code==='23505') return Response.json({error:'An account with this email already exists.'},{status:409});
+    throw error;
+  }
+});
+export const GET = withApiErrors(handleGET);
+export const POST = withApiErrors(handlePOST);

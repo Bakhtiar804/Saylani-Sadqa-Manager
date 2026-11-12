@@ -7,7 +7,7 @@ import type { CityOption, DataRecord } from "@/lib/dashboard-types";
 export const DASHBOARD_DATA_CACHE_TAG = "dashboard-db-records";
 
 type DashboardRecord = DataRecord & {
-  user_id?: string | null;
+  team_id?: string | null;
   rider_id?: string;
   box_id?: string | null;
   partner_id?: string;
@@ -69,21 +69,25 @@ const dashboardQueries = {
   cities: "SELECT city_id, city_name, province FROM cities ORDER BY city_name",
   partners: `SELECT p.*, c.city_name FROM partners p JOIN cities c USING (city_id) ORDER BY p.partner_name`,
   users: `
-      SELECT u.user_id, u.full_name, u.email, u.phone, u.city_id, c.city_name,
-        COALESCE(r.display_name,
-          CASE u.identity_type WHEN 'field_staff' THEN 'Field Staff' WHEN 'partner_identity' THEN 'Partner' END
-        ) AS role,
+      SELECT u.team_id, u.full_name, u.email, u.phone, u.city_id, c.city_name,
+        CASE r.role_key
+          WHEN 'admin' THEN 'City Admin'
+          WHEN 'city_manager' THEN 'Branch Admin'
+          ELSE COALESCE(r.display_name,
+            CASE u.identity_type WHEN 'field_staff' THEN 'Field Staff' WHEN 'partner_identity' THEN 'Partner' END
+          )
+        END AS role,
         u.identity_type,
         CASE WHEN u.deleted_at IS NOT NULL THEN 'Deleted' ELSE INITCAP(u.account_status) END AS account_status,
         u.created_at
-      FROM users u
+      FROM team_members u
       LEFT JOIN roles r ON r.role_id = u.role_id
       LEFT JOIN cities c ON c.city_id = u.city_id
-      ORDER BY u.full_name, u.user_id
+      ORDER BY u.full_name, u.team_id
     `,
   riders: `
       SELECT r.*, u.full_name AS rider_name, u.phone, u.city_id, c.city_name
-      FROM riders r JOIN users u USING (user_id)
+      FROM riders r JOIN team_members u USING (team_id)
       LEFT JOIN cities c ON c.city_id = u.city_id
       ORDER BY u.full_name
     `,
@@ -92,10 +96,10 @@ const dashboardQueries = {
         p.partner_name, rider_user.full_name AS assigned_rider_name
       FROM donation_boxes b
       JOIN cities c ON c.city_id = b.city_id
-      LEFT JOIN users custodian ON custodian.user_id = b.custodian_user_id
+      LEFT JOIN team_members custodian ON custodian.team_id = b.custodian_team_id
       LEFT JOIN partners p ON p.partner_id = b.partner_id
       LEFT JOIN riders r ON r.rider_id = b.assigned_rider_id
-      LEFT JOIN users rider_user ON rider_user.user_id = r.user_id
+      LEFT JOIN team_members rider_user ON rider_user.team_id = r.team_id
       ORDER BY b.box_id
     `,
   collections: `
@@ -109,11 +113,12 @@ const dashboardQueries = {
       JOIN cities city ON city.city_id = collection.city_id
       LEFT JOIN partners partner ON partner.partner_id = collection.partner_id
       JOIN riders rider ON rider.rider_id = collection.rider_id
-      JOIN users rider_user ON rider_user.user_id = rider.user_id
-      JOIN users recorder ON recorder.user_id = collection.recorded_by_user_id
-      LEFT JOIN users counter ON counter.user_id = collection.counted_by_user_id
-      LEFT JOIN users verifier ON verifier.user_id = collection.verified_by_user_id
-      LEFT JOIN users custodian ON custodian.user_id = collection.custodian_user_id
+      JOIN team_members rider_user ON rider_user.team_id = rider.team_id
+      JOIN team_members recorder ON recorder.team_id = collection.recorded_by_team_id
+      LEFT JOIN team_members counter ON counter.team_id = collection.counted_by_team_id
+      LEFT JOIN team_members verifier ON verifier.team_id = collection.verified_by_team_id
+      LEFT JOIN team_members custodian ON custodian.team_id = collection.custodian_team_id
+      WHERE collection.collection_status <> 'Voided'
       ORDER BY collection.collection_date DESC, collection.collection_id
     `,
   riderTasks: `
@@ -122,7 +127,7 @@ const dashboardQueries = {
       JOIN donation_boxes box ON box.box_id = task.box_id
       JOIN cities city ON city.city_id = box.city_id
       JOIN riders rider ON rider.rider_id = task.rider_id
-      JOIN users rider_user ON rider_user.user_id = rider.user_id
+      JOIN team_members rider_user ON rider_user.team_id = rider.team_id
       ORDER BY task.task_date DESC, task.task_id
     `,
   fieldCollectionLog: `
@@ -135,10 +140,10 @@ const dashboardQueries = {
       JOIN cities city ON city.city_id = field.city_id
       LEFT JOIN partners partner ON partner.partner_id = field.partner_id
       JOIN riders rider ON rider.rider_id = field.rider_id
-      JOIN users rider_user ON rider_user.user_id = rider.user_id
-      LEFT JOIN users custodian ON custodian.user_id = field.custodian_user_id
-      LEFT JOIN users counter ON counter.user_id = field.counted_by_user_id
-      LEFT JOIN users verifier ON verifier.user_id = field.verified_by_user_id
+      JOIN team_members rider_user ON rider_user.team_id = rider.team_id
+      LEFT JOIN team_members custodian ON custodian.team_id = field.custodian_team_id
+      LEFT JOIN team_members counter ON counter.team_id = field.counted_by_team_id
+      LEFT JOIN team_members verifier ON verifier.team_id = field.verified_by_team_id
       ORDER BY field.collection_date DESC, field.field_collection_id
     `,
   cashHandoverDeposit: `
@@ -147,15 +152,15 @@ const dashboardQueries = {
       FROM cash_handover_deposits handover
       JOIN cities city ON city.city_id = handover.city_id
       JOIN riders rider ON rider.rider_id = handover.from_rider_id
-      JOIN users rider_user ON rider_user.user_id = rider.user_id
-      JOIN users receiver ON receiver.user_id = handover.received_by_user_id
+      JOIN team_members rider_user ON rider_user.team_id = rider.team_id
+      JOIN team_members receiver ON receiver.team_id = handover.received_by_team_id
       ORDER BY handover.handover_date DESC, handover.handover_id
     `,
   boxInspectionLog: `
       SELECT inspection.*, city.city_name, inspector.full_name AS inspected_by_name
       FROM box_inspections inspection
       JOIN cities city ON city.city_id = inspection.city_id
-      JOIN users inspector ON inspector.user_id = inspection.inspected_by_user_id
+      JOIN team_members inspector ON inspector.team_id = inspection.inspected_by_team_id
       ORDER BY inspection.inspection_date DESC, inspection.inspection_id
     `,
   boxStatusHistory: `
@@ -163,14 +168,14 @@ const dashboardQueries = {
       FROM box_status_history history
       JOIN donation_boxes box ON box.box_id = history.box_id
       JOIN cities city ON city.city_id = box.city_id
-      JOIN users actor ON actor.user_id = history.changed_by_user_id
+      JOIN team_members actor ON actor.team_id = history.changed_by_team_id
       ORDER BY history.changed_on DESC, history.history_id
     `,
   securityIncidents: `
       SELECT incident.*, city.city_name, reporter.full_name AS reported_by_name
       FROM security_incidents incident
       JOIN cities city ON city.city_id = incident.city_id
-      JOIN users reporter ON reporter.user_id = incident.reported_by_user_id
+      JOIN team_members reporter ON reporter.team_id = incident.reported_by_team_id
       ORDER BY incident.incident_date DESC, incident.incident_id
     `,
   operationalCosts: `
@@ -219,6 +224,184 @@ export async function getAllRecords(): Promise<DashboardData> {
   return getDashboardRecords(allDatasetKeys) as Promise<DashboardData>;
 }
 
+type ReportBreakdown = { name: string; value: number; records: number };
+type ReportMonth = { month: string; label: string; value: number };
+
+export type ImportedCityReportSummary = {
+  collections: { records: number; amount: number; firstMonth: string | null; latestMonth: string | null; monthly: ReportMonth[] };
+  expenses: { records: number; amount: number };
+  staff: { latestMonth: string | null; latestTotal: number };
+};
+
+export async function getImportedCityReportSummary(cityName: string): Promise<ImportedCityReportSummary> {
+  "use cache";
+  cacheLife({ stale: 5, revalidate: 10, expire: 60 });
+  cacheTag(DASHBOARD_DATA_CACHE_TAG);
+
+  const pool = getDatabasePool();
+  const tables = await pool.query<{ table_name: string }>(`SELECT table_name FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = ANY($1::text[])`, [[
+    "monthly_collection_reports", "monthly_expense_reports", "monthly_staff_counts", "reporting_cities",
+  ]]);
+  const available = new Set(tables.rows.map((row) => row.table_name));
+  const join = available.has("reporting_cities")
+    ? "LEFT JOIN reporting_cities city ON city.city_id = report.city_id"
+    : "";
+  const normalizedCity = (expression: string) => `regexp_replace(LOWER(COALESCE(${expression}, '')), '[^a-z0-9]', '', 'g')`;
+  const cityFilterFor = (reportAlias: string, cityAlias: string) => available.has("reporting_cities")
+    ? `(${normalizedCity(`${cityAlias}.city_name`)} = ${normalizedCity("$1")} OR ${normalizedCity(`${cityAlias}.normalized_city_name`)} = ${normalizedCity("$1")} OR ${normalizedCity(`${reportAlias}.source_city_name`)} = ${normalizedCity("$1")})`
+    : `${normalizedCity(`${reportAlias}.source_city_name`)} = ${normalizedCity("$1")}`;
+  const cityWhere = cityFilterFor("report", "city");
+  const latestCityWhere = cityFilterFor("latest", "latest_city");
+  const query = <T extends Record<string, unknown>>(table: string, sql: string): Promise<{ rows: T[] }> => available.has(table)
+    ? pool.query<T>(sql, [cityName])
+    : Promise.resolve({ rows: [] as T[] });
+
+  const [collectionSummary, collectionMonths, expenseSummary, staffSummary] = await Promise.all([
+    query<{ records: number; amount_pkr: string | number; first_month: string | null; latest_month: string | null }>("monthly_collection_reports", `SELECT COUNT(*)::int AS records,
+      COALESCE(SUM(report.amount_pkr), 0) AS amount_pkr,
+      MIN(report.report_month)::text AS first_month, MAX(report.report_month)::text AS latest_month
+      FROM monthly_collection_reports report ${join} WHERE ${cityWhere}`),
+    query<{ month: string; amount_pkr: string | number }>("monthly_collection_reports", `SELECT TO_CHAR(report.report_month, 'YYYY-MM') AS month,
+      SUM(report.amount_pkr) AS amount_pkr
+      FROM monthly_collection_reports report ${join} WHERE ${cityWhere}
+      GROUP BY 1 ORDER BY 1`),
+    query<{ records: number; amount_pkr: string | number }>("monthly_expense_reports", `SELECT COUNT(*)::int AS records,
+      COALESCE(SUM(report.amount_pkr), 0) AS amount_pkr
+      FROM monthly_expense_reports report ${join} WHERE ${cityWhere}`),
+    query<{ latest_month: string; latest_total: number }>("monthly_staff_counts", `SELECT report.report_month::text AS latest_month,
+      COALESCE(SUM(report.staff_count), 0)::int AS latest_total
+      FROM monthly_staff_counts report ${join}
+      WHERE ${cityWhere} AND report.report_month = (
+        SELECT MAX(latest.report_month) FROM monthly_staff_counts latest
+        ${available.has("reporting_cities") ? "LEFT JOIN reporting_cities latest_city ON latest_city.city_id = latest.city_id" : ""}
+        WHERE ${latestCityWhere}
+      ) GROUP BY report.report_month ORDER BY report.report_month DESC LIMIT 1`),
+  ]);
+
+  const collection = collectionSummary.rows[0] ?? {};
+  const expenses = expenseSummary.rows[0] ?? {};
+  const staff = staffSummary.rows[0] ?? {};
+  return {
+    collections: {
+      records: Number(collection.records) || 0,
+      amount: Number(collection.amount_pkr) || 0,
+      firstMonth: (collection.first_month as string | null) ?? null,
+      latestMonth: (collection.latest_month as string | null) ?? null,
+      monthly: collectionMonths.rows.map((row: { month: string; amount_pkr: string | number }) => ({
+        month: row.month,
+        label: new Date(`${row.month}-01T00:00:00Z`).toLocaleDateString("en-PK", { month: "short", year: "2-digit", timeZone: "UTC" }),
+        value: Number(row.amount_pkr) || 0,
+      })),
+    },
+    expenses: { records: Number(expenses.records) || 0, amount: Number(expenses.amount_pkr) || 0 },
+    staff: { latestMonth: (staff.latest_month as string | null) ?? null, latestTotal: Number(staff.latest_total) || 0 },
+  };
+}
+
+export async function getImportedReportSummary() {
+  "use cache";
+  cacheLife({ stale: 5, revalidate: 10, expire: 60 });
+  cacheTag(DASHBOARD_DATA_CACHE_TAG);
+
+  const pool = getDatabasePool();
+  const tableCheck = await pool.query<{ table_name: string }>(`SELECT table_name FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = ANY($1::text[])`, [[
+    "monthly_collection_reports", "monthly_expense_reports", "monthly_staff_counts", "reporting_cities",
+  ]]);
+  const availableTables = new Set(tableCheck.rows.map((row) => row.table_name));
+  const queryIfAvailable = <T extends Record<string, unknown>>(table: string, sql: string): Promise<{ rows: T[] }> => availableTables.has(table)
+    ? pool.query<T>(sql)
+    : Promise.resolve({ rows: [] as T[] });
+  const cityJoin = availableTables.has("reporting_cities")
+    ? "LEFT JOIN reporting_cities city ON city.city_id = report.city_id"
+    : "";
+  const reportCityName = availableTables.has("reporting_cities")
+    ? "COALESCE(city.city_name, report.source_city_name, 'Unassigned')"
+    : "COALESCE(report.source_city_name, 'Unassigned')";
+  const [collectionSummary, collectionMonths, collectionChannels, collectionCities,
+    expenseSummary, expenseMonths, expenseCategories, staffSummary, staffCities,
+    reportingCities] = await Promise.all([
+    queryIfAvailable<{ records: number; amount_pkr: string | number; box_count: number; first_month: string | null; latest_month: string | null }>("monthly_collection_reports", `SELECT COUNT(*)::int AS records,
+      COALESCE(SUM(amount_pkr), 0) AS amount_pkr,
+      COALESCE(SUM(box_count) FILTER (WHERE report_month = (SELECT MAX(report_month) FROM monthly_collection_reports)), 0)::int AS box_count,
+      MIN(report_month)::text AS first_month, MAX(report_month)::text AS latest_month
+      FROM monthly_collection_reports`),
+    queryIfAvailable<{ month: string; amount_pkr: string | number; records: number }>("monthly_collection_reports", `SELECT TO_CHAR(report_month, 'YYYY-MM') AS month,
+      SUM(amount_pkr) AS amount_pkr, COUNT(*)::int AS records
+      FROM monthly_collection_reports GROUP BY 1 ORDER BY 1`),
+    queryIfAvailable<{ name: string; value: string | number; records: number }>("monthly_collection_reports", `SELECT COALESCE(NULLIF(TRIM(collection_channel), ''), 'Unspecified') AS name,
+      SUM(amount_pkr) AS value, COUNT(*)::int AS records
+      FROM monthly_collection_reports GROUP BY 1 ORDER BY value DESC`),
+    queryIfAvailable<{ name: string; value: string | number; records: number }>("monthly_collection_reports", `SELECT ${reportCityName} AS name,
+      SUM(report.amount_pkr) AS value, COUNT(*)::int AS records
+      FROM monthly_collection_reports report
+      ${cityJoin}
+      GROUP BY 1 ORDER BY value DESC LIMIT 10`),
+    queryIfAvailable<{ records: number; amount_pkr: string | number; first_month: string | null; latest_month: string | null }>("monthly_expense_reports", `SELECT COUNT(*)::int AS records,
+      COALESCE(SUM(amount_pkr), 0) AS amount_pkr,
+      MIN(report_month)::text AS first_month, MAX(report_month)::text AS latest_month
+      FROM monthly_expense_reports`),
+    queryIfAvailable<{ month: string; amount_pkr: string | number; records: number }>("monthly_expense_reports", `SELECT TO_CHAR(report_month, 'YYYY-MM') AS month,
+      SUM(amount_pkr) AS amount_pkr, COUNT(*)::int AS records
+      FROM monthly_expense_reports GROUP BY 1 ORDER BY 1`),
+    queryIfAvailable<{ name: string; value: string | number; records: number }>("monthly_expense_reports", `SELECT COALESCE(NULLIF(TRIM(expense_category), ''), 'Unspecified') AS name,
+      SUM(amount_pkr) AS value, COUNT(*)::int AS records
+      FROM monthly_expense_reports GROUP BY 1 ORDER BY value DESC`),
+    queryIfAvailable<{ records: number; latest_month: string | null; latest_total: number; latest_cities: number }>("monthly_staff_counts", `SELECT COUNT(*)::int AS records, MAX(report_month)::text AS latest_month,
+      COALESCE(SUM(staff_count) FILTER (WHERE report_month = (SELECT MAX(report_month) FROM monthly_staff_counts)), 0)::int AS latest_total,
+      COUNT(DISTINCT city_id) FILTER (WHERE report_month = (SELECT MAX(report_month) FROM monthly_staff_counts))::int AS latest_cities
+      FROM monthly_staff_counts`),
+    queryIfAvailable<{ name: string; value: string | number }>("monthly_staff_counts", `SELECT ${reportCityName} AS name,
+      SUM(report.staff_count)::int AS value
+      FROM monthly_staff_counts report
+      ${cityJoin}
+      WHERE report.report_month = (SELECT MAX(report_month) FROM monthly_staff_counts)
+      GROUP BY 1 ORDER BY value DESC LIMIT 10`),
+    queryIfAvailable<{ count: number }>("monthly_collection_reports", `SELECT COUNT(DISTINCT city_id)::int AS count FROM monthly_collection_reports`),
+  ]);
+
+  const mapBreakdown = (rows: Array<{ name: string; value: string | number; records?: number }>): ReportBreakdown[] =>
+    rows.map((row) => ({ name: row.name, value: Number(row.value) || 0, records: Number(row.records) || 0 }));
+  const mapMonths = (rows: Array<{ month: string; amount_pkr: string | number }>): ReportMonth[] =>
+    rows.map((row) => ({
+      month: row.month,
+      label: new Date(`${row.month}-01T00:00:00Z`).toLocaleDateString("en-PK", { month: "short", year: "2-digit", timeZone: "UTC" }),
+      value: Number(row.amount_pkr) || 0,
+    }));
+  const collection = collectionSummary.rows[0] ?? {};
+  const expense = expenseSummary.rows[0] ?? {};
+  const staff = staffSummary.rows[0] ?? {};
+  return {
+    collections: {
+      records: Number(collection.records) || 0,
+      amount: Number(collection.amount_pkr) || 0,
+      boxes: Number(collection.box_count) || 0,
+      firstMonth: collection.first_month as string | null,
+      latestMonth: collection.latest_month as string | null,
+      monthly: mapMonths(collectionMonths.rows),
+      channels: mapBreakdown(collectionChannels.rows),
+      cities: mapBreakdown(collectionCities.rows),
+    },
+    expenses: {
+      records: Number(expense.records) || 0,
+      amount: Number(expense.amount_pkr) || 0,
+      firstMonth: expense.first_month as string | null,
+      latestMonth: expense.latest_month as string | null,
+      monthly: mapMonths(expenseMonths.rows),
+      categories: mapBreakdown(expenseCategories.rows),
+    },
+    staff: {
+      records: Number(staff.records) || 0,
+      latestMonth: staff.latest_month as string | null,
+      latestTotal: Number(staff.latest_total) || 0,
+      latestCities: Number(staff.latest_cities) || 0,
+      cities: staffCities.rows.map((row: { name: string; value: string | number }) => ({ name: row.name, value: Number(row.value) || 0 })),
+    },
+    reportingCityCount: Number(reportingCities.rows[0]?.count) || 0,
+  };
+}
+
 export type CollectionExplorerOptions = {
   page?: number;
   search?: string;
@@ -234,7 +417,7 @@ export async function getCollectionExplorerPage(options: CollectionExplorerOptio
   const page = Math.max(1, Math.min(100_000, Math.floor(Number(options.page) || 1)));
   const pageSize = 10;
   const values: (string | number)[] = [];
-  const where: string[] = [];
+  const where: string[] = ["collection.collection_status <> 'Voided'"];
   const add = (value: string | number) => {
     values.push(value);
     return `$${values.length}`;
@@ -257,6 +440,8 @@ export async function getCollectionExplorerPage(options: CollectionExplorerOptio
     city_id: "city.city_name",
     collection_amount_pkr: "collection.collection_amount_pkr",
     collection_status: "collection.collection_status",
+    rider_name: "rider_user.full_name",
+    box_id: "collection.box_id",
   };
   const sortSql = sortColumns[options.sort ?? ""] ?? "collection.collection_date";
   const directionSql = options.direction === "asc" ? "ASC" : "DESC";
@@ -266,17 +451,17 @@ export async function getCollectionExplorerPage(options: CollectionExplorerOptio
     JOIN cities city ON city.city_id = collection.city_id
     LEFT JOIN partners partner ON partner.partner_id = collection.partner_id
     JOIN riders rider ON rider.rider_id = collection.rider_id
-    JOIN users rider_user ON rider_user.user_id = rider.user_id`;
+    JOIN team_members rider_user ON rider_user.team_id = rider.team_id`;
   const [rows, countRows] = await Promise.all([
     readRows(`SELECT collection.*, city.city_name, partner.partner_name,
       rider_user.full_name AS rider_name, recorder.full_name AS recorded_by_name,
       counter.full_name AS counted_by_name, verifier.full_name AS verified_by_name,
       custodian.full_name AS custodian_name
       ${joins}
-      LEFT JOIN users recorder ON recorder.user_id = collection.recorded_by_user_id
-      LEFT JOIN users counter ON counter.user_id = collection.counted_by_user_id
-      LEFT JOIN users verifier ON verifier.user_id = collection.verified_by_user_id
-      LEFT JOIN users custodian ON custodian.user_id = collection.custodian_user_id
+      LEFT JOIN team_members recorder ON recorder.team_id = collection.recorded_by_team_id
+      LEFT JOIN team_members counter ON counter.team_id = collection.counted_by_team_id
+      LEFT JOIN team_members verifier ON verifier.team_id = collection.verified_by_team_id
+      LEFT JOIN team_members custodian ON custodian.team_id = collection.custodian_team_id
       ${filterSql}
       ORDER BY ${sortSql} ${directionSql}, collection.collection_id ${directionSql}
       LIMIT ${limitParam} OFFSET ${offsetParam}`, values),
@@ -312,6 +497,8 @@ export async function getFieldCollectionExplorerPage(options: CollectionExplorer
     city_id: "city.city_name",
     total_cash_counted_pkr: "field.total_cash_counted_pkr",
     collection_status: "field.collection_status",
+    rider_name: "rider_user.full_name",
+    box_id: "field.box_id",
   };
   const sortSql = sortColumns[options.sort ?? ""] ?? "field.collection_date";
   const directionSql = options.direction === "asc" ? "ASC" : "DESC";
@@ -321,15 +508,15 @@ export async function getFieldCollectionExplorerPage(options: CollectionExplorer
     JOIN cities city ON city.city_id = field.city_id
     LEFT JOIN partners partner ON partner.partner_id = field.partner_id
     JOIN riders rider ON rider.rider_id = field.rider_id
-    JOIN users rider_user ON rider_user.user_id = rider.user_id`;
+    JOIN team_members rider_user ON rider_user.team_id = rider.team_id`;
   const [rows, countRows] = await Promise.all([
     readRows(`SELECT field.*, city.city_name, partner.partner_name,
       rider_user.full_name AS rider_name, custodian.full_name AS custodian_name,
       counter.full_name AS counted_by_name, verifier.full_name AS verified_by_name
       ${joins}
-      LEFT JOIN users custodian ON custodian.user_id = field.custodian_user_id
-      LEFT JOIN users counter ON counter.user_id = field.counted_by_user_id
-      LEFT JOIN users verifier ON verifier.user_id = field.verified_by_user_id
+      LEFT JOIN team_members custodian ON custodian.team_id = field.custodian_team_id
+      LEFT JOIN team_members counter ON counter.team_id = field.counted_by_team_id
+      LEFT JOIN team_members verifier ON verifier.team_id = field.verified_by_team_id
       ${filterSql}
       ORDER BY ${sortSql} ${directionSql}, field.field_collection_id ${directionSql}
       LIMIT ${limitParam} OFFSET ${offsetParam}`, values),
@@ -351,12 +538,12 @@ export async function getCollectionsPageData() {
       COUNT(*) FILTER (WHERE collection_status = 'Pending Verification')::int AS pending_count,
       COUNT(*) FILTER (WHERE collection_status = 'Flagged')::int AS flagged_count,
       COALESCE(SUM(collection_amount_pkr) FILTER (WHERE collection_status = 'Verified'), 0) AS verified_total
-      FROM collections`),
+      FROM collections WHERE collection_status <> 'Voided'`),
     readRows(`SELECT collection_status AS name, COUNT(*)::int AS value
-      FROM collections GROUP BY collection_status ORDER BY collection_status`),
+      FROM collections WHERE collection_status <> 'Voided' GROUP BY collection_status ORDER BY collection_status`),
     readRows(`SELECT TO_CHAR(collection_date, 'YYYY-MM') AS month,
       SUM(collection_amount_pkr) AS collections FROM collections
-      WHERE collection_status = 'Verified' GROUP BY TO_CHAR(collection_date, 'YYYY-MM') ORDER BY month`),
+      WHERE collection_status <> 'Voided' AND collection_status = 'Verified' GROUP BY TO_CHAR(collection_date, 'YYYY-MM') ORDER BY month`),
     readRows(`SELECT city.city_name AS name, COALESCE(SUM(collection.collection_amount_pkr), 0) AS value
       FROM cities city LEFT JOIN collections collection
         ON collection.city_id = city.city_id AND collection.collection_status = 'Verified'
@@ -417,7 +604,7 @@ export async function getOverviewData(
   const pool = getDatabasePool();
   const [cities, dateRows] = await Promise.all([
     getCityOptions(),
-    pool.query<{ min_date: string | null; max_date: string | null }>("SELECT MIN(collection_date)::text AS min_date, MAX(collection_date)::text AS max_date FROM collections"),
+    pool.query<{ min_date: string | null; max_date: string | null }>("SELECT MIN(collection_date)::text AS min_date, MAX(collection_date)::text AS max_date FROM collections WHERE collection_status <> 'Voided'"),
   ]);
   city = cities.some((item) => item.city_id === city) ? city : "all";
   const { startDate, endDate } = getRangeBounds(dateRows.rows[0]?.min_date ?? null, dateRows.rows[0]?.max_date ?? null, range);
@@ -437,14 +624,14 @@ export async function getOverviewData(
       COUNT(*) FILTER (WHERE collection_status = 'Flagged')::int AS flagged_count,
       COALESCE(SUM(collection_amount_pkr) FILTER (WHERE collection_status = 'Verified'), 0) AS verified_pkr,
       COALESCE(SUM(collection_amount_pkr) FILTER (WHERE collection_status = 'Pending Verification'), 0) AS pending_pkr
-      FROM collections WHERE collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR city_id = $3)
+      FROM collections WHERE collection_status <> 'Voided' AND collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR city_id = $3)
       ), daily AS (
       SELECT collection_date::text AS date, SUM(collection_amount_pkr) AS collections
-      FROM collections WHERE collection_status = 'Verified' AND collection_date BETWEEN $1 AND $2
+      FROM collections WHERE collection_status <> 'Voided' AND collection_status = 'Verified' AND collection_date BETWEEN $1 AND $2
       AND ($3 = 'all' OR city_id = $3) GROUP BY collection_date
       ), city_totals AS (
       SELECT city_id, SUM(collection_amount_pkr) AS collection FROM collections
-      WHERE collection_status = 'Verified' AND collection_date BETWEEN $1 AND $2
+      WHERE collection_status <> 'Voided' AND collection_status = 'Verified' AND collection_date BETWEEN $1 AND $2
       AND ($3 = 'all' OR city_id = $3) GROUP BY city_id
       ), boxes AS (
       SELECT COUNT(*)::int AS boxes,
@@ -465,7 +652,7 @@ export async function getOverviewData(
     `, parameters),
     readRows(`WITH recent_ids AS (
       SELECT collection_id FROM collections
-      WHERE collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR city_id = $3)
+      WHERE collection_status <> 'Voided' AND collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR city_id = $3)
       ORDER BY collection_date DESC, collection_id LIMIT 8
       )
       SELECT collection.*, city.city_name, partner.partner_name,
@@ -476,11 +663,11 @@ export async function getOverviewData(
       JOIN cities city ON city.city_id = collection.city_id
       LEFT JOIN partners partner ON partner.partner_id = collection.partner_id
       JOIN riders rider ON rider.rider_id = collection.rider_id
-      JOIN users rider_user ON rider_user.user_id = rider.user_id
-      JOIN users recorder ON recorder.user_id = collection.recorded_by_user_id
-      LEFT JOIN users counter ON counter.user_id = collection.counted_by_user_id
-      LEFT JOIN users verifier ON verifier.user_id = collection.verified_by_user_id
-      LEFT JOIN users custodian ON custodian.user_id = collection.custodian_user_id
+      JOIN team_members rider_user ON rider_user.team_id = rider.team_id
+      JOIN team_members recorder ON recorder.team_id = collection.recorded_by_team_id
+      LEFT JOIN team_members counter ON counter.team_id = collection.counted_by_team_id
+      LEFT JOIN team_members verifier ON verifier.team_id = collection.verified_by_team_id
+      LEFT JOIN team_members custodian ON custodian.team_id = collection.custodian_team_id
       ORDER BY collection.collection_date DESC, collection.collection_id LIMIT 8`, parameters),
     readRows(`SELECT * FROM (
       SELECT ('collection-' || collection.collection_id) AS id, collection.city_id,
@@ -490,7 +677,7 @@ export async function getOverviewData(
         'wallet' AS icon,
         CASE collection.collection_status WHEN 'Verified' THEN 'green' WHEN 'Flagged' THEN 'red' ELSE 'orange' END AS tone
       FROM collections collection JOIN cities city ON city.city_id = collection.city_id
-      WHERE collection.collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR collection.city_id = $3)
+      WHERE collection.collection_status <> 'Voided' AND collection.collection_date BETWEEN $1 AND $2 AND ($3 = 'all' OR collection.city_id = $3)
       UNION ALL
       SELECT ('incident-' || incident.incident_id), incident.city_id, incident.incident_date::text,
         incident.severity || ' security incident ' || LOWER(incident.incident_status),

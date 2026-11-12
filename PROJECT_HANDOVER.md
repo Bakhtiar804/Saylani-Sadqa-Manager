@@ -1,5 +1,18 @@
 # Project Handover: Saylani Sadqa Manager
 
+## Update: 11 November 2026
+
+Meeting requirements were subsequently implemented. The current role policy,
+TypeScript Excel upload, visual tree, leaderboard and rider-history workflows,
+database migration and verification are documented in [MEETING_CHANGES.md](MEETING_CHANGES.md).
+
+The supplied real workbook is now the primary source for authenticated monthly
+reporting. See [REAL_DATA.md](REAL_DATA.md) for current architecture, import,
+reconciliation, missing-data semantics, city mapping, preserved operational routes
+and checks. The historical handover below predates this change. Operational task
+assignment, rider submissions, collection reviews and box changes already exist
+in the current code; the read-only limitations below are historical.
+
 Prepared 2026-11-09 from the checked-out repository, current Git state, local project documentation, and implementation history in this Codex conversation. This document intentionally contains no passwords, tokens, database URLs, or secret values.
 
 ## 1. Project overview and requirements

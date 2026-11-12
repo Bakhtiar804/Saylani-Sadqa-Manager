@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchResponse } from '@/lib/client-request';
+
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -48,7 +50,7 @@ export function SignInForm() {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetchResponse("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

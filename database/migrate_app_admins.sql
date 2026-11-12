@@ -1,5 +1,5 @@
 -- Run after schema.sql and seed_demo.sql.
--- Copies legacy admin logins to users without deleting or changing app_admins.
+-- Copies legacy admin logins to team_members without changing app_admins.
 -- If the legacy table is absent, this migration safely does nothing.
 BEGIN;
 
@@ -11,8 +11,8 @@ DO $$ BEGIN
       ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT ''admin''';
 
     EXECUTE $migration$
-      INSERT INTO users (
-        user_id,
+      INSERT INTO team_members (
+        team_id,
         full_name,
         email,
         phone,

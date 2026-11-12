@@ -1,3 +1,4 @@
+import { withApiErrors } from '@/lib/api-errors';
 import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
@@ -7,10 +8,10 @@ function textField(body: Record<string, unknown>, key: string, max: number): str
   return typeof body[key] === "string" ? body[key].trim().slice(0, max) : "";
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const session = await getOperationsSession();
   if (!session) return Response.json({ error: "Sign in to register a box." }, { status: 401 });
-  if (!["super_admin", "admin"].includes(session.role)) return Response.json({ error: "Box registration access is required." }, { status: 403 });
+  if (session.role !== 'admin') return Response.json({ error: "Only a City Admin can register boxes in their city." }, { status: 403 });
   if (session.role === "admin" && !session.cityId) return Response.json({ error: "A city assignment is required." }, { status: 403 });
   if (!hasValidRequestOrigin(request)) return Response.json({ error: "Invalid request origin." }, { status: 403 });
 
@@ -20,7 +21,8 @@ export async function POST(request: Request) {
   const body = input as Record<string, unknown>;
   const boxId = textField(body, "boxId", 16).toUpperCase();
   const qrCode = textField(body, "qrCode", 40).toUpperCase();
-  const cityId = session.role === "super_admin" ? textField(body, "cityId", 16) : session.cityId!;
+  const cityId = session.cityId!;
+  const district = textField(body, "district", 100) || null;
   const area = textField(body, "area", 100);
   const locationType = textField(body, "locationType", 40);
   const locationDescription = textField(body, "locationDescription", 1000);
@@ -53,14 +55,14 @@ export async function POST(request: Request) {
       }
     }
     if (custodianUserId) {
-      const custodian = await client.query("SELECT 1 FROM users WHERE user_id = $1 AND identity_type = 'field_staff' AND city_id = $2", [custodianUserId, cityId]);
+      const custodian = await client.query("SELECT 1 FROM team_members WHERE team_id = $1 AND identity_type = 'field_staff' AND city_id = $2", [custodianUserId, cityId]);
       if (custodian.rowCount !== 1) {
         await client.query("ROLLBACK");
         return Response.json({ error: "Choose a field custodian in the box's city." }, { status: 400 });
       }
     }
     if (assignedRiderId) {
-      const rider = await client.query("SELECT 1 FROM riders JOIN users USING (user_id) WHERE riders.rider_id = $1 AND users.city_id = $2 AND users.account_status = 'active' AND users.deleted_at IS NULL", [assignedRiderId, cityId]);
+      const rider = await client.query("SELECT 1 FROM riders JOIN team_members USING (team_id) WHERE riders.rider_id = $1 AND team_members.city_id = $2 AND team_members.account_status = 'active' AND team_members.deleted_at IS NULL", [assignedRiderId, cityId]);
       if (rider.rowCount !== 1) {
         await client.query("ROLLBACK");
         return Response.json({ error: "Choose an active rider in the box's city." }, { status: 400 });
@@ -69,18 +71,18 @@ export async function POST(request: Request) {
     await client.query(`
       INSERT INTO donation_boxes (
         box_id, qr_code, city_id, area, location_type, location_description,
-        custodian_user_id, partner_id, assigned_rider_id, installation_date,
-        box_status, security_level, is_demo_record
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Active', $11, FALSE)
-    `, [boxId, qrCode, cityId, area, locationType, locationDescription, custodianUserId, partnerId, assignedRiderId, installationDate, securityLevel]);
+        custodian_team_id, partner_id, assigned_rider_id, installation_date,
+        box_status, security_level, is_demo_record, district
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Active', $11, FALSE, $12)
+    `, [boxId, qrCode, cityId, area, locationType, locationDescription, custodianUserId, partnerId, assignedRiderId, installationDate, securityLevel, district]);
     await client.query(`
-      INSERT INTO box_status_history (history_id, box_id, previous_status, new_status, changed_on, changed_by_user_id, reason)
+      INSERT INTO box_status_history (history_id, box_id, previous_status, new_status, changed_on, changed_by_team_id, reason)
       VALUES ($1, $2, 'Not Registered', 'Active', CURRENT_DATE, $3, 'Initial registration')
     `, [randomBytes(8).toString("hex").toUpperCase(), boxId, session.userId]);
     await client.query(`
-      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_user_id, before_data, after_data)
+      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'donation_box', $2, 'registered', $3, NULL, $4::jsonb)
-    `, [randomBytes(16).toString("hex"), boxId, session.userId, JSON.stringify({ cityId, area, locationType, boxStatus: "Active" })]);
+    `, [randomBytes(16).toString("hex"), boxId, session.userId, JSON.stringify({ cityId, district, area, locationType, boxStatus: "Active" })]);
     await client.query("COMMIT");
     revalidateTag("dashboard-db-records", { expire: 0 });
     return Response.json({ boxId }, { status: 201, headers: { "Cache-Control": "no-store" } });
@@ -93,3 +95,5 @@ export async function POST(request: Request) {
     return Response.json({ error: "The box could not be registered." }, { status: 503 });
   } finally { client.release(); }
 }
+
+export const POST = withApiErrors(handlePOST);

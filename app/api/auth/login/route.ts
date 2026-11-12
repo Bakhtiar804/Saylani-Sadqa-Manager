@@ -1,3 +1,4 @@
+import { withApiErrors } from '@/lib/api-errors';
 import { verifyPassword } from "@/lib/auth";
 import { findLoginAccountByEmail } from "@/lib/admin-accounts";
 import { createUserSession } from "@/lib/session";
@@ -6,7 +7,7 @@ import { cookies } from "next/headers";
 const INVALID_ACCOUNT_PASSWORD_HASH =
   "c2FkcWEtZHVtbXktc2FsdA.cccwb47eD-Jfib7iVv2GQLJ72fpTk3TXpI_ciOydLV_3_7IEyybJPMU_cXwGF9-vS6EM-vyYdIomCLzNOOJf0g";
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   let credentials: unknown;
   try {
     credentials = await request.json();
@@ -70,3 +71,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withApiErrors(handlePOST);

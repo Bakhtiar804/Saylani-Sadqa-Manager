@@ -1,13 +1,13 @@
 import "server-only";
 
 import { cookies } from "next/headers";
-import { isActiveLoginAccount } from "@/lib/admin-accounts";
+import { isCurrentLoginSession } from "@/lib/admin-accounts";
 import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 
 export async function getOperationsSession() {
   const cookieStore = await cookies();
   const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
-  if (!session || !await isActiveLoginAccount(session.userId)) return null;
+  if (!session || !await isCurrentLoginSession(session)) return null;
   return session;
 }
 

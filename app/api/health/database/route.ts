@@ -1,7 +1,8 @@
+import { withApiErrors } from '@/lib/api-errors';
 import { getDatabasePool } from "@/lib/db";
 import { connection } from "next/server";
 
-export async function GET() {
+async function handleGET() {
   await connection();
 
   try {
@@ -21,3 +22,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = withApiErrors(handleGET);

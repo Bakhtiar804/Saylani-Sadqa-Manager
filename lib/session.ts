@@ -9,6 +9,7 @@ export const APP_ROLES = ["super_admin", "admin", "city_manager", "rider"] as co
 export type AppRole = (typeof APP_ROLES)[number];
 
 export type UserSession = {
+  /** Account identity from team_members.team_id, not the numeric team_record_id. */
   userId: string;
   email: string;
   name: string;

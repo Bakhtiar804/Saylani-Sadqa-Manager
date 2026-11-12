@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchResponse } from '@/lib/client-request';
+
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
@@ -17,7 +19,7 @@ export default function BoxStatusControl({ boxId, currentStatus }: { boxId: stri
     event.preventDefault();
     setError(""); setSuccess(""); setBusy(true);
     try {
-      const response = await fetch(`/api/dashboard/boxes/${encodeURIComponent(boxId)}`, {
+      const response = await fetchResponse(`/api/dashboard/boxes/${encodeURIComponent(boxId)}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, reason }),
       });

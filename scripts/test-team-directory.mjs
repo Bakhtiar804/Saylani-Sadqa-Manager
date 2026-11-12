@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import React,{act} from 'react';
+import {JSDOM} from 'jsdom';
+import {createJiti} from 'jiti';
+const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost/'});
+Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Event:dom.window.Event,FormData:dom.window.FormData,IS_REACT_ACT_ENVIRONMENT:true});
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:{onLine:true,userAgent:'jsdom'}});
+const {createRoot}=await import('react-dom/client');
+const {default:Team}=await createJiti(import.meta.url,{jsx:{runtime:'automatic'},tsconfigPaths:true}).import('../components/dashboard/team-account-management.tsx');
+const accounts=[{id:'A',name:'City Person',role:'City Admin',email:'city@example.invalid',phone:'+923001234567',accountStatus:'active',employmentStatus:null,cityId:'K',cityName:'Karachi',zone:null},{id:'B',name:'Rider Person',role:'Rider',email:'rider@example.invalid',phone:'+923001234567',accountStatus:'active',employmentStatus:'Active',cityId:'K',cityName:'Karachi',zone:'North'}];
+accounts.push({...accounts[0],id:'C',name:'Branch Person',role:'Branch Admin',email:'branch@example.invalid'});
+const root=createRoot(document.getElementById('root'));
+const requests=[];
+globalThis.fetch=async(url,options)=>{requests.push([url,options.method,JSON.parse(options.body)]);return Response.json({account:{...accounts[0],name:'Updated City'}});};
+try {
+ await act(async()=>root.render(React.createElement(Team,{actorRole:'super_admin',initialAccounts:accounts,cities:[],assignedCity:null})));
+ assert.equal(document.querySelectorAll('tbody tr').length,3);
+ assert.ok(!document.querySelector('tbody').textContent.includes('active / Active'));
+ const filter=[...document.querySelectorAll('select')].find(select=>select.parentElement.textContent.includes('Filter team role'));
+ await act(async()=>{filter.value='Rider';filter.dispatchEvent(new Event('change',{bubbles:true}));});
+ assert.equal(document.querySelectorAll('tbody tr').length,1);assert.ok(document.querySelector('tbody').textContent.includes('Rider Person'));
+ await act(async()=>{filter.value='all';filter.dispatchEvent(new Event('change',{bubbles:true}));});
+ const edit=document.querySelector('[aria-label="Edit City Person"]');assert.ok(edit);assert.ok(document.querySelector('[aria-label="Edit Rider Person"]'));
+ assert.ok(document.querySelector('[aria-label="Edit Branch Person"]'));assert.ok(document.querySelector('[aria-label="Delete Branch Person"]'));
+ assert.ok(!document.querySelector('details').className.includes('order-2'));
+ await act(async()=>edit.click());
+ const dialog=document.querySelector('[role="dialog"]');assert.ok(dialog);dialog.querySelector('[name="name"]').value='Updated City';
+ await act(async()=>dialog.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+ assert.equal(requests[0][1],'PATCH');assert.equal(requests[0][2].name,'Updated City');assert.equal(requests[0][2].userId,'A');assert.ok(!('role' in requests[0][2]));assert.ok(document.querySelector('tbody').textContent.includes('Updated City'));
+ await act(async()=>document.querySelector('[aria-label="Delete Updated City"]').click());
+ assert.ok(document.querySelector('[role="dialog"]').textContent.includes('historical collections'));
+ console.log('PASS role filtering, single status, role-scoped actions, PATCH payload, saved row refresh and delete confirmation');
+}finally{await act(async()=>root.unmount());dom.window.close();}

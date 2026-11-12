@@ -13,8 +13,8 @@ import Icon from "./icons";
 
 const roleLabels: Record<string, string> = {
   super_admin: "Super Admin",
-  admin: "Admin",
-  city_manager: "City Manager",
+  admin: "City Admin",
+  city_manager: "Branch Admin",
   rider: "Rider",
 };
 
@@ -92,16 +92,16 @@ export default function Sidebar({
         {canManageAdmins && (
           <Link
             href="/dashboard/admins"
-            aria-label="Admin Management"
+            aria-label="City Admin Management"
             aria-current={
               pathname.startsWith("/dashboard/admins") ? "page" : undefined
             }
-            title="Admin Management"
+            title="City Admin Management"
             className={`group relative flex min-h-[46px] items-center gap-3 rounded-[10px] px-3 text-[14px] font-semibold transition duration-200 hover:bg-[#f4f8f2] hover:text-[#276431] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#61bb46] max-[900px]:justify-center max-[900px]:px-0 max-[600px]:w-[70px] max-[600px]:min-w-[70px] max-[600px]:shrink-0 max-[600px]:min-h-[58px] max-[600px]:flex-col max-[600px]:gap-1 max-[600px]:px-1 max-[600px]:text-[10px] ${pathname.startsWith("/dashboard/admins") ? "bg-[#edf6e9] text-[#276431] before:absolute before:-left-4 before:h-7 before:w-[3px] before:rounded-r before:bg-[#61bb46] max-[900px]:before:-left-[9px] max-[600px]:before:-top-1 max-[600px]:before:left-1/2 max-[600px]:before:h-[3px] max-[600px]:before:w-6 max-[600px]:before:-translate-x-1/2" : "text-[#627165]"}`}
           >
             <Icon name="users" size={19} />
             <span className="max-[900px]:hidden max-[600px]:block max-[600px]:whitespace-nowrap">
-              Admins
+              City Admins
             </span>
           </Link>
         )}
@@ -113,10 +113,10 @@ export default function Sidebar({
           </span>
           <b className="text-[13px] text-[#203a27]">Need a hand?</b>
           <p className="my-1.5 text-xs leading-relaxed text-[#657568]">
-            Your workspace is using fictional demo records.
+            Monthly source reports and individual field records are available in your workspace.
           </p>
           <span className="text-xs font-semibold text-[#276431]">
-            Demo environment
+            Donation operations
           </span>
         </div>
         <div className="flex items-center gap-2.5 border-t border-[#edf1eb] px-1 pt-3.5 max-[900px]:justify-center">

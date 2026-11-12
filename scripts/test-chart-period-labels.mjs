@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {createJiti} from 'jiti';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {JSDOM} from 'jsdom';
+const {BreakdownBarChart,CollectionTrendChart,CityCollectionBars}=await createJiti(import.meta.url,{jsx:{runtime:'automatic'},tsconfigPaths:true,nativeModules:['recharts']}).import('../components/dashboard/charts.tsx');
+const months=['January','February','March','April','May','June','July','August','September'];const data=months.map((name,index)=>({name,value:index+1}));
+function find(node,predicate){if(!node||typeof node!=='object')return; if(predicate(node))return node;const children=node.props?.children;for(const child of Array.isArray(children)?children:[children]){if(Array.isArray(child)){for(const nested of child){const result=find(nested,predicate);if(result)return result;}}else{const result=find(child,predicate);if(result)return result;}}}
+const chart=BreakdownBarChart({data,periodAxis:true,height:260});const axis=find(chart,node=>node.props?.dataKey==='name');assert.equal(axis.props.interval,0);assert.deepEqual(months.map(axis.props.tickFormatter),['Jan','Feb','Mar','Apr','May','June','July','Aug','Sep']);assert.equal(axis.props.tickFormatter('2026'),'2026');
+assert.equal(find(chart,node=>node.props?.style?.height===260).props.style.minWidth,388);assert.equal(find(chart,node=>node.props?.data===data).props.data,data);assert.equal(data[1].name,'February');
+const regular=BreakdownBarChart({data});assert.equal(find(regular,node=>node.props?.dataKey==='name').props.interval,undefined);
+console.log('PASS every period tick is retained, month labels fit, year labels stay numeric, narrow charts scroll, tooltip source names and other charts stay intact');
+const points=months.map((_,index)=>({label:`2026-${String(index+1).padStart(2,'0')}`,collections:index===1?null:index*100}));
+const trend=CollectionTrendChart({data:points,height:280});const monthAxis=find(trend,node=>node.props?.dataKey==='label');
+const plot=find(trend,node=>node.props?.className?.includes('collection-trend-plot'));
+assert.equal(plot.props.style['--collection-period-count'],9);assert.equal(plot.props.style.minWidth,undefined);assert.equal(plot.props['data-multiple-years'],'false');
+assert.equal(monthAxis.props.interval,0);assert.deepEqual(points.map(point=>monthAxis.props.tickFormatter(point.label)),['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep']);
+const tooltip=find(trend,node=>typeof node.props?.labelFormatter==='function');assert.equal(tooltip.props.labelFormatter('2026-02'),'February 2026');assert.equal(find(trend,node=>node.props?.data===points).props.data,points);
+const acrossYears=CollectionTrendChart({data:[{label:'2024-01',collections:10},{label:'2025-01',collections:20}]});assert.notEqual(find(acrossYears,node=>node.props?.dataKey==='label').props.tickFormatter('2024-01'),find(acrossYears,node=>node.props?.dataKey==='label').props.tickFormatter('2025-01'));
+const cities=Array.from({length:32},(_,index)=>({name:index===0?'Nawabshah (Shaheed Benazirabad)':`City ${index}`,value:index===31?null:3200-index*100}));
+const dom=new JSDOM(renderToStaticMarkup(CityCollectionBars({data:cities,height:280})));
+assert.equal(dom.window.document.querySelectorAll('li').length,32);assert.ok(dom.window.document.body.textContent.includes(cities[0].name));assert.ok(dom.window.document.body.textContent.includes('Not reported'));assert.equal(dom.window.document.querySelector('[role="region"]').style.height,'280px');assert.equal(dom.window.document.querySelectorAll('li')[0].querySelector('.h-full').style.width,'100%');dom.window.close();
+console.log('PASS overview retains every month, full month/year tooltips, null data and all city names/values in a compact scrollable comparison');

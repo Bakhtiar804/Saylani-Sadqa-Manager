@@ -1,3 +1,4 @@
+import { withApiErrors } from '@/lib/api-errors';
 import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
@@ -5,10 +6,10 @@ import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-au
 
 const boxStatuses = ["Active", "Inactive", "Damaged", "Under Review"] as const;
 
-export async function PATCH(request: Request, context: { params: Promise<{ boxId: string }> }) {
+async function handlePATCH(request: Request, context: { params: Promise<{ boxId: string }> }) {
   const session = await getOperationsSession();
   if (!session) return Response.json({ error: "Sign in to update a box." }, { status: 401 });
-  if (!["super_admin", "admin", "city_manager"].includes(session.role)) return Response.json({ error: "Box status management access is required." }, { status: 403 });
+  if (!["admin", "city_manager"].includes(session.role)) return Response.json({ error: "Your role has read-only access to boxes." }, { status: 403 });
   if (session.role !== "super_admin" && !session.cityId) return Response.json({ error: "A city assignment is required." }, { status: 403 });
   if (!hasValidRequestOrigin(request)) return Response.json({ error: "Invalid request origin." }, { status: 403 });
 
@@ -39,11 +40,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ boxId
     }
     await client.query("UPDATE donation_boxes SET box_status = $2 WHERE box_id = $1", [boxId, status]);
     await client.query(`
-      INSERT INTO box_status_history (history_id, box_id, previous_status, new_status, changed_on, changed_by_user_id, reason)
+      INSERT INTO box_status_history (history_id, box_id, previous_status, new_status, changed_on, changed_by_team_id, reason)
       VALUES ($1, $2, $3, $4, CURRENT_DATE, $5, $6)
     `, [randomBytes(8).toString("hex").toUpperCase(), boxId, current.box_status, status, session.userId, reason]);
     await client.query(`
-      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_user_id, before_data, after_data)
+      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'donation_box', $2, 'status_changed', $3, $4::jsonb, $5::jsonb)
     `, [randomBytes(16).toString("hex"), boxId, session.userId, JSON.stringify({ status: current.box_status }), JSON.stringify({ status, reason })]);
     await client.query("COMMIT");
@@ -55,3 +56,5 @@ export async function PATCH(request: Request, context: { params: Promise<{ boxId
     return Response.json({ error: "The box status could not be updated." }, { status: 503 });
   } finally { client.release(); }
 }
+
+export const PATCH = withApiErrors(handlePATCH);

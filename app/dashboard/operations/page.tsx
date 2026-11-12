@@ -1,6 +1,5 @@
 import { BreakdownBarChart, ChartLegend, StatusDonutChart } from "@/components/dashboard/charts";
 import ChartPanel from "@/components/dashboard/chart-panel";
-import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
@@ -18,7 +17,6 @@ export default async function OperationsPage() {
   const highIncidents = securityIncidents.filter((record) => record.severity === "High").length;
   return <>
     <PageHeading eyebrow="Field assurance" title="Inspections & Incidents" description="Monitor box condition, inspection follow-ups, and security incidents across the demo network."/>
-    <DemoNotice/>
     <MetricGrid items={[
       { label: "Inspection records", value: boxInspectionLog.length.toLocaleString("en-PK"), note: "Condition and access checks", icon: "box", tone: "blue" },
       { label: "Follow-up required", value: followups.toLocaleString("en-PK"), note: "Inspection records marked Yes", icon: "clock", tone: "orange" },

@@ -97,7 +97,7 @@ async function main() {
   const pool = new Pool({ ...databaseConfig(), connectionTimeoutMillis: 10_000, max: 1 });
   try {
     const result = await pool.query<{ account_status: string }>(
-      `UPDATE public.users AS u
+      `UPDATE public.team_members AS u
        SET password_hash = $1
        FROM public.roles AS r
        WHERE r.role_id = u.role_id

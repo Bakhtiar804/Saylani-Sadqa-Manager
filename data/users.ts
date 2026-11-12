@@ -64,7 +64,7 @@ export const users = [
     full_name: "Ali Ahmed",
     email: "user0007@demo.sadqabox.test",
     phone: 3004965789,
-    role: "Admin",
+    role: "City Admin",
     city_id: "C005",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -104,7 +104,7 @@ export const users = [
     full_name: "Ayesha Khan",
     email: "user0011@demo.sadqabox.test",
     phone: 3002022698,
-    role: "Admin",
+    role: "City Admin",
     city_id: "C003",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -124,7 +124,7 @@ export const users = [
     full_name: "Hamza Khan",
     email: "user0013@demo.sadqabox.test",
     phone: 3009519948,
-    role: "City Manager",
+    role: "Branch Admin",
     city_id: "C005",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -384,7 +384,7 @@ export const users = [
     full_name: "Umar Akhtar",
     email: "user0039@demo.sadqabox.test",
     phone: 3001649691,
-    role: "City Manager",
+    role: "Branch Admin",
     city_id: "C001",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -454,7 +454,7 @@ export const users = [
     full_name: "Saad Qureshi",
     email: "user0046@demo.sadqabox.test",
     phone: 3009580255,
-    role: "City Manager",
+    role: "Branch Admin",
     city_id: "C003",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -544,7 +544,7 @@ export const users = [
     full_name: "Farhan Javed",
     email: "user0055@demo.sadqabox.test",
     phone: 3006406444,
-    role: "Admin",
+    role: "City Admin",
     city_id: "C005",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -594,7 +594,7 @@ export const users = [
     full_name: "Farhan Akhtar",
     email: "user0060@demo.sadqabox.test",
     phone: 3002221854,
-    role: "Admin",
+    role: "City Admin",
     city_id: "C004",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -694,7 +694,7 @@ export const users = [
     full_name: "Sara Hussain",
     email: "user0070@demo.sadqabox.test",
     phone: 3005558623,
-    role: "Admin",
+    role: "City Admin",
     city_id: "C001",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -834,7 +834,7 @@ export const users = [
     full_name: "Zainab Shah",
     email: "user0084@demo.sadqabox.test",
     phone: 3008072684,
-    role: "City Manager",
+    role: "Branch Admin",
     city_id: "C004",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -1184,7 +1184,7 @@ export const users = [
     full_name: "Umar Raza",
     email: "user0119@demo.sadqabox.test",
     phone: 3002242892,
-    role: "City Manager",
+    role: "Branch Admin",
     city_id: "C001",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -1424,7 +1424,7 @@ export const users = [
     full_name: "Hassan Shah",
     email: "user0143@demo.sadqabox.test",
     phone: 3007780932,
-    role: "City Manager",
+    role: "Branch Admin",
     city_id: "C003",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -1484,7 +1484,7 @@ export const users = [
     full_name: "Sana Iqbal",
     email: "user0149@demo.sadqabox.test",
     phone: 3002563790,
-    role: "City Manager",
+    role: "Branch Admin",
     city_id: "C001",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -1604,7 +1604,7 @@ export const users = [
     full_name: "Umar Javed",
     email: "user0161@demo.sadqabox.test",
     phone: 3003551903,
-    role: "City Manager",
+    role: "Branch Admin",
     city_id: "C004",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -1784,7 +1784,7 @@ export const users = [
     full_name: "Fatima Iqbal",
     email: "user0179@demo.sadqabox.test",
     phone: 3007022335,
-    role: "City Manager",
+    role: "Branch Admin",
     city_id: "C001",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -1924,7 +1924,7 @@ export const users = [
     full_name: "Danish Khan",
     email: "user0193@demo.sadqabox.test",
     phone: 3006503032,
-    role: "City Manager",
+    role: "Branch Admin",
     city_id: "C002",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -2314,7 +2314,7 @@ export const users = [
     full_name: "Raza Hussain",
     email: "user0232@demo.sadqabox.test",
     phone: 3008199311,
-    role: "Admin",
+    role: "City Admin",
     city_id: "C003",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -2324,7 +2324,7 @@ export const users = [
     full_name: "Farhan Javed",
     email: "user0233@demo.sadqabox.test",
     phone: 3001440466,
-    role: "Admin",
+    role: "City Admin",
     city_id: "C005",
     account_status: "Active",
     demo_password: "DemoOnly@123"
@@ -2474,7 +2474,7 @@ export const users = [
     full_name: "Sana Butt",
     email: "user0248@demo.sadqabox.test",
     phone: 3004860617,
-    role: "Admin",
+    role: "City Admin",
     city_id: "C004",
     account_status: "Active",
     demo_password: "DemoOnly@123"

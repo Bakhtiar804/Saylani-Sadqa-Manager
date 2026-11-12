@@ -13,5 +13,5 @@ export default async function ManagerTeamPage() {
     listTeamAccounts(session), getDashboardRecords(["cities"] as const),
   ]);
   const cityName = cities.find((city) => city.city_id === session.cityId)?.city_name ?? "Assigned city";
-  return <><PageHeading eyebrow="Team management" title="Team Accounts" description={`Create Rider logins for ${cityName}.`}/><div className="mb-6 rounded-xl border border-[#dce8dc] bg-[#f5faf2] px-4 py-3 text-sm leading-6 text-[#536455]">City Managers can create Rider accounts only. New Riders are assigned to your city.</div><TeamAccountManagement actorRole="city_manager" initialAccounts={accounts} cities={[]} assignedCity={{ cityId: session.cityId, cityName }}/></>;
+  return <><PageHeading eyebrow="Team management" title="Team Accounts" description={`Create Rider logins for ${cityName}.`}/><div className="mb-6 rounded-xl border border-[#dce8dc] bg-[#f5faf2] px-4 py-3 text-sm leading-6 text-[#536455]">Branch Admins can create Rider accounts only. New Riders are assigned to your city.</div><TeamAccountManagement actorRole="city_manager" initialAccounts={accounts} cities={[]} assignedCity={{ cityId: session.cityId, cityName }}/></>;
 }

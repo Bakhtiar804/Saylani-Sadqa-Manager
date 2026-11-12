@@ -1,3 +1,4 @@
+import { withApiErrors } from '@/lib/api-errors';
 import { randomBytes } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { getDatabasePool } from "@/lib/db";
@@ -5,10 +6,10 @@ import { getOperationsSession, hasValidRequestOrigin } from "@/lib/operations-au
 
 const taskTypes = ["Scheduled Collection", "Box Verification", "Follow-up Visit"] as const;
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const session = await getOperationsSession();
   if (!session) return Response.json({ error: "Sign in to assign a rider." }, { status: 401 });
-  if (session.role !== "super_admin") return Response.json({ error: "Only a Super Admin can assign rider tasks." }, { status: 403 });
+  if (!['admin', 'city_manager'].includes(session.role) || !session.cityId) return Response.json({ error: "A city-scoped operational account is required." }, { status: 403 });
   if (!hasValidRequestOrigin(request)) return Response.json({ error: "Invalid request origin." }, { status: 403 });
 
   let input: unknown;
@@ -35,12 +36,16 @@ export async function POST(request: Request) {
     await client.query("BEGIN");
     const riderResult = await client.query<{ rider_id: string; city_id: string }>(`
       SELECT rider.rider_id, account.city_id
-      FROM riders rider JOIN users account USING (user_id)
+      FROM riders rider JOIN team_members account USING (team_id)
       WHERE rider.rider_id = $1 AND rider.employment_status = 'Active'
         AND account.account_status = 'active' AND account.deleted_at IS NULL
       FOR UPDATE OF rider
     `, [riderId]);
     const rider = riderResult.rows[0];
+    if (rider && rider.city_id !== session.cityId) {
+      await client.query('ROLLBACK');
+      return Response.json({ error: 'This rider is outside your city.' }, { status: 403 });
+    }
     if (!rider) {
       await client.query("ROLLBACK");
       return Response.json({ error: "Choose an active rider." }, { status: 400 });
@@ -69,7 +74,7 @@ export async function POST(request: Request) {
       VALUES ($1, $2, $3, $4, $5, 'Assigned')
     `, [taskId, riderId, boxId, taskDate, taskType]);
     await client.query(`
-      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_user_id, before_data, after_data)
+      INSERT INTO activity_audit_log (audit_id, entity_type, entity_id, action, actor_team_id, before_data, after_data)
       VALUES ($1, 'rider_task', $2, 'assigned', $3, NULL, $4::jsonb)
     `, [randomBytes(16).toString("hex"), taskId, session.userId, JSON.stringify({ riderId, boxId, taskDate, taskType, status: "Assigned" })]);
     await client.query("COMMIT");
@@ -83,3 +88,5 @@ export async function POST(request: Request) {
     client.release();
   }
 }
+
+export const POST = withApiErrors(handlePOST);

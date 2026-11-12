@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AuthAction } from "./auth-action";
 import { Brand } from "./brand";
+import { Button } from '@/components/ui/button';
 
 export function Navbar() {
   return (
@@ -11,7 +12,7 @@ export function Navbar() {
         </Link>
         <div className="flex gap-2 sm:gap-3">
           <AuthAction action="signIn">Sign In</AuthAction>
-          <AuthAction action="signUp">Sign Up</AuthAction>
+          <Button asChild><Link href="/leaderboard">Leaderboard</Link></Button>
         </div>
       </nav>
     </header>
