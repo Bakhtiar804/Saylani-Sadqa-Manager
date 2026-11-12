@@ -60,7 +60,8 @@ try {
     UPDATE team_members SET branch_id='QA-BR1',assigned_branch='Test Branch' WHERE team_id IN ('QA-BRANCH','QA-RIDER');
     UPDATE team_members SET branch_id='QA-BR2',assigned_branch='Other Branch' WHERE team_id='QA-RIDER-OTHER';
     INSERT INTO team_member_branch_assignments(team_id,city_id,branch_id) VALUES('QA-BRANCH','C001','QA-BR1'),('QA-RIDER','C001','QA-BR1'),('QA-RIDER-OTHER','C001','QA-BR2');`);
-  await fixtures.query(`INSERT INTO riders VALUES('QA-R1','QA-RIDER','Active','North'),('QA-R2','QA-OTHER','Active','Central'),('QA-R3','QA-RIDER-OTHER','Active','South');
+  // Seed a historical other-branch collection; recovery is local to this fixture transaction.
+  await fixtures.query(`BEGIN; SET LOCAL saylani.workflow_recovery='on'; INSERT INTO riders VALUES('QA-R1','QA-RIDER','Active','North'),('QA-R2','QA-OTHER','Active','Central'),('QA-R3','QA-RIDER-OTHER','Active','South');
     INSERT INTO donation_boxes(box_id,qr_code,city_id,area,location_type,location_description,assigned_rider_id,installation_date,box_status,security_level)
     VALUES('QA-BOX1','QR-QA-1','C001','Gulshan','Shop','Fixture street','QA-R1','2026-01-01','Active','Standard'),
       ('QA-BOX2','QR-QA-2','C002','Model Town','Shop','Other city','QA-R2','2026-01-01','Active','Standard'),
@@ -72,7 +73,7 @@ try {
     INSERT INTO rider_tasks(task_id,rider_id,box_id,task_date,task_type,task_status) VALUES
       ('QA-VISIT','QA-R1','QA-DAMAGED','2026-11-11','Follow-up Visit','Assigned'),
       ('QA-CANCEL','QA-R1','QA-BOX1','2026-11-11','Scheduled Collection','Cancelled'),
-      ('QA-SKIP','QA-R1','QA-BOX1','2026-11-11','Scheduled Collection','Skipped');`);
+      ('QA-SKIP','QA-R1','QA-BOX1','2026-11-11','Scheduled Collection','Skipped'); COMMIT;`);
   if(process.env.FLOW_ACCOUNT_RENAME==='1') {
     await fixtures.query(`ALTER TABLE team_members RENAME TO users;
       ALTER TABLE users RENAME COLUMN team_record_id TO id;
@@ -224,7 +225,7 @@ try {
   await call(`${taskPath}/collection`,409,{session:rider,method:'POST',json:{counts:{note_100:1}}});
   await call('/api/dashboard/tasks/QA-VISIT/collection',409,{session:rider,method:'POST',json:{counts:{coin_1:1}}});
   const savedTask=(await fixtures.query('SELECT task_status,workflow_stage,completed_at,completion_time,jsonb_array_length(workflow_events)::int AS event_count FROM rider_tasks WHERE task_id=$1',[taskData.taskId])).rows[0];
-  assert.equal(savedTask.task_status,'Completed');assert.equal(savedTask.workflow_stage,'submitted');assert.ok(savedTask.completed_at);assert.ok(savedTask.completion_time);assert.equal(savedTask.event_count,4);
+  assert.equal(savedTask.task_status,'Completed');assert.equal(savedTask.workflow_stage,'submitted');assert.ok(savedTask.completed_at);assert.ok(savedTask.completion_time);assert.equal(savedTask.event_count,5);
   const branchTaskHtml=await (await call('/dashboard/manager/riders',200,{session:branch})).text();assert.ok(branchTaskHtml.includes(taskData.taskId));assert.ok(branchTaskHtml.includes('Completed'));assert.ok(branchTaskHtml.includes('1,235'));assert.ok(!branchTaskHtml.includes('QA-BOX-BR2'));assert.ok(!branchTaskHtml.includes('QA-RIDER-OTHER'));
   const branchCollectionsHtml=await (await call('/dashboard/manager/collections?year=all',200,{session:branch})).text();assert.ok(branchCollectionsHtml.includes('Rider cash submissions'));assert.ok(branchCollectionsHtml.includes('1,235'));assert.ok(branchCollectionsHtml.includes('Verify'));
   assert.ok(!branchCollectionsHtml.includes('QA-COL-BR2'));
@@ -241,7 +242,10 @@ try {
   assert.equal((await fixtures.query("SELECT workflow_stage FROM rider_tasks WHERE task_id='QA-SKIP'")).rows[0].workflow_stage,'assigned');
   const cashRecord=(await fixtures.query('SELECT cash_breakdown,cash_notes_pkr::float8,cash_coins_pkr::float8,rider_task_id FROM collections WHERE collection_id=$1',[submitted.collectionId])).rows[0];
   assert.equal(cashRecord.cash_notes_pkr,1230);assert.equal(cashRecord.cash_coins_pkr,5);assert.equal(cashRecord.rider_task_id,taskData.taskId);assert.equal(cashRecord.cash_breakdown.coin_2,2);
-  const progress=(await fixtures.query('SELECT workflow_stage,workflow_events FROM rider_tasks WHERE task_id=$1',[taskData.taskId])).rows[0];assert.equal(progress.workflow_stage,'submitted');assert.deepEqual(progress.workflow_events.map((event:{stage:string})=>event.stage),['departed','arrived','counting','submitted']);
+  const progress=(await fixtures.query('SELECT workflow_stage,workflow_events FROM rider_tasks WHERE task_id=$1',[taskData.taskId])).rows[0];assert.equal(progress.workflow_stage,'submitted');assert.deepEqual(progress.workflow_events.filter((event:{stage?:string})=>event.stage).map((event:{stage:string})=>event.stage),['departed','arrived','counting','submitted']);
+  assert.equal(progress.workflow_events[0].event,'assigned');
+  assert.equal(progress.workflow_events.at(-1).collection_id,submitted.collectionId);
+  assert.equal(progress.workflow_events.at(-1).actor_team_id,'QA-RIDER');
   assert.equal((await fixtures.query('SELECT count(*)::int AS count FROM field_collection_logs WHERE task_id=$1',[taskData.taskId])).rows[0].count,1);
   const saved=(await fixtures.query('SELECT collection_amount_pkr::text,collection_date::text FROM collections WHERE collection_id=$1',[submitted.collectionId])).rows[0];assert.equal(Number(saved.collection_amount_pkr),1235);
   const today=(await fixtures.query("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::date::text AS day")).rows[0].day;assert.equal(saved.collection_date,today);
@@ -254,6 +258,16 @@ try {
   const networkDistrictHtml=await (await call('/dashboard/leaderboard?city=C001&year=all',200,{session:superAdmin})).text();assert.ok(networkDistrictHtml.includes('Karachi East'));
   console.log('PASS task assignment, cash and non-cash completion, closed/skipped guards, duplicates and Karachi dates');
   if(tasksOnly){
+    const teamPage=await (await call('/dashboard/admins',200,{session:superAdmin})).text();
+    assert.ok(teamPage.includes('Team Accounts'));
+    const leaderboardPage=await (await call('/dashboard/leaderboard',200,{session:superAdmin})).text();
+    assert.ok(leaderboardPage.includes('City Leaderboard'));
+    const profilePage=await (await call(`/dashboard/rider/profile?month=${today.slice(0,7)}`,200,{session:rider})).text();
+    assert.ok(profilePage.includes('My collection history'));
+    assert.ok(profilePage.includes('My verified collections'));
+    assert.ok(profilePage.includes(submitted.collectionId));
+    assert.ok(!profilePage.includes('QA-BOX-BR2'));
+    console.log('PASS incoming Suspense pages with local verification data, personal history and access scope.');
     const verifyPath=`/api/dashboard/collections/${submitted.collectionId}/verification`;
     await call(verifyPath,200,{session:branch,method:'PATCH',json:{status:'Verified'}});
     const verified=(await fixtures.query('SELECT collection_status,verified_by_team_id,verified_at FROM collections WHERE collection_id=$1',[submitted.collectionId])).rows[0];

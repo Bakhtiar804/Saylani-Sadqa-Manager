@@ -6,13 +6,19 @@ import { SESSION_COOKIE_NAME, verifyUserSession } from "@/lib/session";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
+import DashboardSkeleton from "@/components/dashboard/dashboard-skeleton";
 
 export const metadata = {
   title: "Team Accounts | Saylani Sadqa Manager",
   description: "Create and review role accounts.",
 };
 
-export default async function AdminManagementPage() {
+export default function AdminManagementPage() {
+  return <Suspense fallback={<DashboardSkeleton />}><AdminManagementContent /></Suspense>;
+}
+
+async function AdminManagementContent() {
   await connection();
   const cookieStore = await cookies();
   const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);

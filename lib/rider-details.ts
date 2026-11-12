@@ -4,15 +4,14 @@ import { getActiveTeamBranch } from './city-branches';
 import type { UserSession } from './session';
 import type { DataRecord } from './dashboard-types';
 
-export function previousReportingMonth(now=new Date()) {
-  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Karachi',year:'numeric',month:'2-digit'}).formatToParts(now);
-  const year=Number(parts.find(part=>part.type==='year')!.value);const month=Number(parts.find(part=>part.type==='month')!.value);
-  return new Date(Date.UTC(year,month-2,1)).toISOString().slice(0,7);
-}
-
 export function currentReportingMonth(now=new Date()) {
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Karachi',year:'numeric',month:'2-digit'}).formatToParts(now);
-  return `${parts.find(part=>part.type==='year')!.value}-${parts.find(part=>part.type==='month')!.value}`;
+  const year=Number(parts.find(part=>part.type==='year')!.value);const month=Number(parts.find(part=>part.type==='month')!.value);
+  return `${year}-${String(month).padStart(2,'0')}`;
+}
+export function previousReportingMonth(now=new Date()) {
+  const current=currentReportingMonth(now);
+  return new Date(Date.UTC(Number(current.slice(0,4)),Number(current.slice(5,7))-2,1)).toISOString().slice(0,7);
 }
 
 export async function getRiderDetails(session:UserSession,requestedMonth?:string,now=new Date()) {
@@ -25,6 +24,7 @@ export async function getRiderDetails(session:UserSession,requestedMonth?:string
   const personJoin = session.role === 'city_manager'
     ? 'LEFT JOIN team_member_branch_assignments branch_assignment ON branch_assignment.team_id=person.team_id'
     : '';
+  // Rider identity never falls back to city access; managers stay in their active branch.
   const personScope = session.role === 'super_admin'
     ? 'TRUE'
     : session.role === 'rider'
@@ -39,7 +39,7 @@ export async function getRiderDetails(session:UserSession,requestedMonth?:string
       : session.role === 'super_admin'
         ? []
         : [session.cityId];
-  const boxScope=session.role==='super_admin'?'TRUE':session.role==='rider'?'box.assigned_rider_id=(SELECT rider_id FROM riders WHERE team_id=$1)':session.role==='city_manager'?'box.city_id=$1 AND box_assignment.branch_id=$2':'box.city_id=$1';
+  const boxScope=session.role==='super_admin'?'TRUE':session.role==='rider'?'EXISTS (SELECT 1 FROM riders owner WHERE owner.rider_id=box.assigned_rider_id AND owner.team_id=$1::text)':session.role==='city_manager'?'box.city_id=$1 AND box_assignment.branch_id=$2':'box.city_id=$1';
   const pool=getDatabasePool();
   const [profiles,history,boxes,tasks]=await Promise.all([
     pool.query(`SELECT rider.rider_id,rider.team_id,person.full_name AS rider_name,person.email,person.phone,

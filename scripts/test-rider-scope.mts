@@ -27,11 +27,17 @@ try {
   await owner.query(`CREATE SCHEMA ${schema}`);created=true;
   await fixture.query(await fs.readFile('database/schema.sql','utf8'));
   await fixture.query(`BEGIN; SET LOCAL saylani.workflow_recovery='on'; INSERT INTO cities VALUES('C1','Fixture City One','Fixture Province'),('C2','Fixture City Two','Fixture Province');
-    INSERT INTO roles VALUES(1,'rider','Rider');
+    INSERT INTO roles VALUES(1,'rider','Rider'),(2,'admin','City Admin'),(3,'city_manager','Branch Admin');
     INSERT INTO team_members(team_id,full_name,email,city_id,role_id,identity_type,password_hash) VALUES
       ('TEM-001','Rider One','one@example.invalid','C1',1,'login_account','fixture-only'),
       ('TEM-002','Rider Two','two@example.invalid','C1',1,'login_account','fixture-only'),
-      ('TEM-003','Rider Three','three@example.invalid','C2',1,'login_account','fixture-only');
+      ('TEM-003','Rider Three','three@example.invalid','C2',1,'login_account','fixture-only'),
+      ('ADMIN','City Admin','admin@example.invalid','C1',2,'login_account','fixture-only'),
+      ('MANAGER','Branch Admin','manager@example.invalid','C1',3,'login_account','fixture-only');
+    INSERT INTO branches(branch_id,city_id,branch_name) VALUES('BR1','C1','Branch One'),('BR2','C1','Branch Two');
+    UPDATE team_members SET branch_id='BR1' WHERE team_id IN ('MANAGER','TEM-001');
+    UPDATE team_members SET branch_id='BR2' WHERE team_id='TEM-002';
+    INSERT INTO team_member_branch_assignments(team_id,city_id,branch_id) VALUES('MANAGER','C1','BR1'),('TEM-001','C1','BR1'),('TEM-002','C1','BR2');
     INSERT INTO riders VALUES('R1','TEM-001','Active','Zone One'),('R2','TEM-002','Active','Zone Two'),('R3','TEM-003','Active','Zone Three');
     INSERT INTO donation_boxes(box_id,qr_code,city_id,area,location_type,location_description,assigned_rider_id,installation_date,box_status,security_level) VALUES
       ('B1','QR1','C1','Area One','Shop','Fixture street','R1','2026-01-01','Active','Standard'),
@@ -39,6 +45,7 @@ try {
       ('B3','QR3','C2','Area Three','Shop','Fixture street','R3','2026-01-01','Active','Standard'),
       ('B4','QR4','C1','Unassigned Area','Shop','Fixture street',NULL,'2026-01-01','Active','Standard'),
       ('B5','QR5','C2','Previous City Area','Shop','Fixture street','R1','2026-01-01','Active','Standard');
+    INSERT INTO branch_box_assignments(box_id,city_id,branch_id) VALUES('B1','C1','BR1'),('B2','C1','BR2'),('B4','C1','BR1');
     INSERT INTO rider_tasks(task_id,rider_id,box_id,task_date,task_type,task_status) VALUES
       ('T1','R1','B1','2026-11-05','Scheduled Collection','Assigned'),
       ('T2','R2','B2','2026-11-05','Scheduled Collection','Assigned'),
@@ -67,7 +74,7 @@ try {
   assert.deepEqual(previous.history.map(row=>row.collection_id),['COL5']);
   const now=new Date('2026-11-12T10:00:00Z');
   for(const role of ['super_admin','admin','city_manager','rider'] as const) {
-    const recent=await getRiderDetails(session('TEM-001','C1',role),undefined,now);
+    const recent=await getRiderDetails(session(role==='city_manager'?'MANAGER':'TEM-001','C1',role),undefined,now);
     assert.equal(recent.month,'2026-11');assert.equal(recent.currentMonth,'2026-11');assert.ok(recent.history.length>0);
   }
   const explicitPrevious=await getRiderDetails(session('TEM-001','C1'),'2026-10',now);
@@ -83,12 +90,23 @@ try {
   }
   const changedCity=await getRiderDetails(session('TEM-001','C2'),'2026-11');
   assert.deepEqual(changedCity.history.map(row=>row.collection_id).sort(),['COL1','COL4']);
-  for(const role of ['admin','city_manager'] as const) {
+  for(const role of ['admin'] as const) {
     const admin=await getRiderDetails(session('ADMIN','C1',role),'2026-11');
     assert.equal(admin.profiles.length,2);assert.deepEqual(admin.history.map(row=>row.collection_id).sort(),['COL1','COL2']);
     assert.ok(admin.boxes.every(row=>row.city_id==='C1'));
     assert.ok(admin.tasks.every(row=>row.city_id==='C1'));
   }
+  const manager=await getRiderDetails(session('MANAGER','C1','city_manager'),'2026-11');
+  assert.deepEqual(manager.profiles.map(row=>row.team_id),['TEM-001']);
+  assert.deepEqual(manager.history.map(row=>row.collection_id),['COL1']);
+  assert.equal(manager.history[0].collection_status,'Pending Verification');
+  assert.deepEqual(manager.boxes.map(row=>row.box_id),['B1','B4']);
+  assert.deepEqual(manager.tasks.map(row=>row.task_id),['T1']);
+  for(const managerId of ['UNASSIGNED-MANAGER','TEM-001']) {
+    const unavailable=await getRiderDetails(session(managerId,'C1','city_manager'),'2026-11');
+    assert.ok(Object.values(unavailable).filter(Array.isArray).every(rows=>rows.length===0));
+  }
+  console.log('PASS active-branch Rider/box/history/task isolation, verification fields and denied unassigned managers.');
   const network=await getRiderDetails(session('SUPER',null,'super_admin'),'2026-11');
   assert.equal(network.profiles.length,3);assert.equal(network.history.length,4);assert.equal(network.boxes.length,5);
   const notifications=await getRiderTaskNotifications('TEM-001');
