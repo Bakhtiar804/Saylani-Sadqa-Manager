@@ -1,0 +1,57 @@
+import assert from 'node:assert/strict';
+// @ts-expect-error jsdom is a test runtime; the project does not install its optional types.
+import { JSDOM } from 'jsdom';
+import { createJiti } from 'jiti';
+const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost/'});
+Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Event:dom.window.Event,IS_REACT_ACT_ENVIRONMENT:true});
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:dom.window.navigator});
+const React=await import('react');
+const {act}=React;
+const {renderToString}=await import('react-dom/server');
+const {hydrateRoot}=await import('react-dom/client');
+const {AppRouterContext}=await import('next/dist/shared/lib/app-router-context.shared-runtime.js');
+const jiti=createJiti(import.meta.url,{jsx:{runtime:'automatic'},tsconfigPaths:true});
+const {default:RiderTasks}=await jiti.import<typeof import('../components/dashboard/rider-task-actions')>('../components/dashboard/rider-task-actions.tsx');
+const router={bfcacheId:'test',back(){},forward(){},refresh(){},push(){},replace(){},prefetch:async()=>{}};
+let task={task_id:'TASK-UI',task_date:'2026-11-12',task_type:'Scheduled Collection',task_status:'Assigned',workflow_stage:'assigned',workflow_events:'[]',box_id:'BOX-UI',box_status:'Active',area:'Gulshan'};
+const view=()=>React.createElement(AppRouterContext.Provider,{value:router},React.createElement(RiderTasks,{tasks:[task]}));
+const container=document.getElementById('root')!;
+container.innerHTML=renderToString(view());
+const errors:unknown[]=[];
+let root:ReturnType<typeof hydrateRoot>;
+const originalFetch=globalThis.fetch;
+const requests:{url:string;body:Record<string,unknown>}[]=[];
+globalThis.fetch=async(url,options)=>{requests.push({url:String(url),body:JSON.parse(String(options?.body))});return Response.json(String(url).endsWith('/collection')?{collectionId:'COL-UI',amount:245}:{status:'In Progress',stage:'departed'});};
+const click=async(text:string)=>{const button=[...container.querySelectorAll('button')].find(button=>button.textContent?.includes(text));assert.ok(button,`Missing button: ${text}`);await act(async()=>button.click());};
+try {
+  await act(async()=>{root=hydrateRoot(container,view(),{onRecoverableError:error=>errors.push(error)});});
+  assert.equal(container.querySelectorAll('input[type=number]').length,0);
+  await click('I am leaving');assert.equal(requests.at(-1)?.body.stage,'departed');
+  task={...task,workflow_stage:'departed',task_status:'In Progress'};await act(async()=>root.render(view()));
+  await click('I have arrived');assert.equal(requests.at(-1)?.body.stage,'arrived');
+  task={...task,workflow_stage:'arrived'};await act(async()=>root.render(view()));
+  await click('Start counting');assert.equal(requests.at(-1)?.body.stage,'counting');
+  task={...task,workflow_stage:'counting'};await act(async()=>root.render(view()));
+  assert.equal(container.querySelectorAll('input[type=number]').length,11);
+  const setQuantity=async(label:string,value:string)=>{
+    const input=container.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement;
+    assert.ok(input);await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value')!.set!.call(input,value);input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));});
+  };
+  await setQuantity('Rs 100 note quantity','2');await setQuantity('Rs 20 note quantity','2');await setQuantity('Rs 5 coin quantity','1');
+  assert.equal(container.querySelector('output')?.textContent,'PKR 245');
+  const submit=container.querySelector('form button') as HTMLButtonElement;assert.ok(submit.disabled);
+  await act(async()=>{(container.querySelector('input[type=checkbox]') as HTMLInputElement).click();});
+  assert.equal(submit.disabled,false);
+  globalThis.fetch=async()=>{throw new TypeError('Test network failure');};
+  await act(async()=>{container.querySelector('form')!.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));});
+  assert.ok(container.textContent?.includes('Unable to reach the server'));
+  assert.equal(container.querySelector('output')?.textContent,'PKR 245');
+  assert.equal((container.querySelector('input[aria-label="Rs 100 note quantity"]') as HTMLInputElement).value,'2');
+  globalThis.fetch=async(url,options)=>{requests.push({url:String(url),body:JSON.parse(String(options?.body))});return Response.json({collectionId:'COL-UI',amount:245});};
+  await act(async()=>{container.querySelector('form')!.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));});
+  assert.equal(requests.at(-1)?.body.amount,undefined);assert.deepEqual(requests.at(-1)?.body.counts,{note_100:2,note_20:2,coin_5:1});
+  assert.ok(container.textContent?.includes('COL-UI'));assert.ok(container.textContent?.includes('Awaiting cash handover'));
+  assert.equal(container.querySelectorAll('input[type=number]').length,0);
+  assert.deepEqual(errors,[]);
+  console.log('PASS Rider UI hydration, ordered actions, 11 denomination quantities, automatic total, confirmation, network retry preserving counts and receipt.');
+} finally {await act(async()=>root?.unmount());globalThis.fetch=originalFetch;dom.window.close();}

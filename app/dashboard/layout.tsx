@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import {Suspense,type ReactNode} from "react";
+import DashboardSkeleton from '@/components/dashboard/dashboard-skeleton';
 import AdminShell from "@/components/dashboard/admin-shell";
 import { verifyUserSession, SESSION_COOKIE_NAME } from "@/lib/session";
 import { cookies } from "next/headers";
@@ -11,9 +12,11 @@ export const metadata = {
   description: "Monthly donation reports and field operations dashboard.",
 };
 
-export const instant = false;
+export default function DashboardLayout({children}:{children:ReactNode}) {
+  return <Suspense fallback={<div className="p-6"><DashboardSkeleton/></div>}><AuthenticatedDashboard>{children}</AuthenticatedDashboard></Suspense>;
+}
 
-export default async function DashboardLayout({ children }: { children: ReactNode }) {
+async function AuthenticatedDashboard({ children }: { children: ReactNode }) {
   await connection();
   const cookieStore = await cookies();
   const session = verifyUserSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
@@ -27,7 +30,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       userName={session.name}
       userRole={session.role}
     >
-      {children}
+      <Suspense fallback={<DashboardSkeleton/>}>{children}</Suspense>
     </AdminShell>
   );
 }

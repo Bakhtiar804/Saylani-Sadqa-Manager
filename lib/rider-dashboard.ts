@@ -53,7 +53,7 @@ export async function getRiderDashboard(userId: string) {
   const [taskResult, collectionResult, fieldLogResult, summaryResult] = await Promise.all([
     pool.query(`
       SELECT task.task_id, task.task_date, task.task_type, task.task_status,
-        task.completion_time, task.notes, box.box_id, box.qr_code, box.area,
+        task.completion_time, task.notes, task.workflow_stage, task.workflow_events::text, box.box_id, box.qr_code, box.area,
         box.location_type, box.location_description, box.box_status,
         city.city_name, partner.partner_name
       FROM rider_tasks task
@@ -66,7 +66,7 @@ export async function getRiderDashboard(userId: string) {
     pool.query(`
       SELECT collection_id, collection_date, collection_time, box_id,
         collection_amount_pkr, collection_status, cash_handover_status,
-        deposit_status, discrepancy_amount_pkr, notes
+        deposit_status, discrepancy_amount_pkr, notes, cash_breakdown::text, rider_task_id
       FROM collections
       WHERE rider_id = $1
       ORDER BY collection_date DESC, collection_id DESC

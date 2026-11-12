@@ -1,5 +1,21 @@
 # Sadqa Manager database guide
 
+## Rider collection workflow
+
+Run `npm run migrate:rider-workflow` against an existing database before deploying
+the Rider workflow. New databases get the same fields from `schema.sql`.
+The migration is additive and repeatable; historical tasks keep their status and
+do not receive invented departure/arrival timestamps.
+
+Collection tasks advance through assigned → departed → arrived → counting →
+submitted. `rider_tasks.workflow_events` stores server timestamps and visit notes.
+Rider submissions accept denomination quantities rather than a manually entered
+amount. The server calculates coins, notes and total, and atomically saves the
+collection, cash breakdown, field log, completed task and audit entry. The unique
+`collections.rider_task_id` index prevents duplicate collection records per task.
+Handover and deposit start as Pending; submitting a collection does not confirm
+that cash was received or deposited.
+
 This folder contains a readable PostgreSQL schema and local demo data. These
 scripts are for development only; do not load the demo credentials or seed into
 production.

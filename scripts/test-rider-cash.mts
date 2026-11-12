@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { countCash, canAdvanceCollection } from '../lib/rider-workflow';
+const mixed=countCash({coin_1:3,coin_2:2,coin_5:2,coin_10:1,note_10:2,note_20:1,note_50:1,note_100:1,note_500:1,note_1000:1,note_5000:1});
+assert.equal(mixed.coins,27);assert.equal(mixed.notes,6690);assert.equal(mixed.total,6717);
+assert.equal(countCash({}).total,0);
+assert.equal(countCash({note_5000:20000}).total,100_000_000);
+for(const value of [null,[],5,{coin_1:-1},{coin_2:0.5},{coin_1:'2'},{coin_1:NaN},{coin_1:Infinity},{note_5000:20001},{coin_3:1},{unknown:1}]) assert.throws(()=>countCash(value));
+assert.ok(canAdvanceCollection('assigned','departed'));
+assert.ok(canAdvanceCollection('departed','arrived'));
+assert.ok(canAdvanceCollection('arrived','counting'));
+for(const pair of [['assigned','counting'],['assigned','submitted'],['counting','submitted'],['arrived','departed'],['submitted','assigned'],['invalid','departed']]) assert.equal(canAdvanceCollection(pair[0],pair[1]),false);
+console.log('PASS mixed cash totals, integer/overflow/unsupported denomination validation and ordered task transitions.');

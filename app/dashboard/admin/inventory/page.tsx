@@ -1,6 +1,5 @@
 import { connection } from "next/server";
 import BoxRegistrationForm from "@/components/dashboard/box-registration-form";
-import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
@@ -21,7 +20,6 @@ export default async function AdminBoxesPage({searchParams}:{searchParams:Promis
   const attention = boxes.filter((box) => ["Damaged", "Under Review"].includes(String(box.box_status))).length;
   return <>
     <PageHeading eyebrow="Box management" title="Donation Boxes" description="Register boxes and manage city-scoped inventory and status history."/>
-    <DemoNotice/>
     <ReportedBoxInventory {...reports} base={base} network={false}/>
     {role === "admin" && <BoxRegistrationForm fixedCityId={cityId} cities={records.cities} partners={records.partners} users={records.users} riders={records.riders}/>}
     <MetricGrid items={[

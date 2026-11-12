@@ -1,6 +1,5 @@
 import { BreakdownBarChart, ChartLegend, StatusDonutChart } from "@/components/dashboard/charts";
 import ChartPanel from "@/components/dashboard/chart-panel";
-import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
@@ -16,7 +15,6 @@ export default async function UsersPage() {
   const cityData = countBy(users.map((user) => ({ ...user, city_name: cities.find((city) => city.city_id === user.city_id)?.city_name || "Unassigned" })), "city_name");
   return <>
     <PageHeading eyebrow="Access administration" title="Users" description="Inspect demo accounts by role, assigned city, and account status."/>
-    <DemoNotice/>
     <MetricGrid items={[
       { label: "User records", value: users.length.toLocaleString("en-PK"), note: "Passwords excluded from this interface", icon: "users", tone: "blue" },
       { label: "Active accounts", value: users.filter((user) => user.account_status === "Active").length.toLocaleString("en-PK"), note: "Based on source account status", icon: "check", tone: "green" },

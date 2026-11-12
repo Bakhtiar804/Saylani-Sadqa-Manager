@@ -1,5 +1,27 @@
 # Project flow verification — 11 November 2026
 
+## Rider collection workflow — 12 November 2026
+
+- Production build and TypeScript checks passed; targeted ESLint checks passed.
+- 184 isolated full-flow HTTP checks passed against the production build,
+  including real password login, scoped task assignment, ordered Rider steps,
+  skip/resume, denomination validation, calculated totals, collection review,
+  simultaneous submissions, account protections, all role pages and workbook import.
+- Database assertions confirmed saved denomination quantities, coin/note subtotals,
+  task link, progress timeline, completed task and one field visit log per submission.
+  A supplied forged amount was ignored in favor of the calculated denomination total.
+- Rider UI hydration and interaction tests passed: departure/arrival/counting actions,
+  11 denomination inputs, automatic total, confirmation, receipt and network retry
+  preserving entered quantities.
+- Cash calculation tests covered mixed denominations, invalid quantities, unsupported
+  denominations, total limits and out-of-order transitions.
+- The live additive migration was applied and verified repeatable. Existing task and
+  collection counts and collection totals were preserved. Full-flow test fixtures
+  ran in a temporary isolated schema, which was removed; live account, collection
+  and imported report snapshots remained unchanged.
+- TypeScript excludes local ` - Copy` backup folders/files, keeping copied old sources
+  out of the active build without modifying those backups.
+
 ## Result
 
 Production build, TypeScript, ESLint, hydration regressions, workbook/database
@@ -299,6 +321,68 @@ client city selection across the diagram and all three inventory entry points.
 Regression hydration tests switch Karachi to Lahore and assert every inventory
 link carries Lahore plus the same year, month and channel. TypeScript and
 targeted ESLint passed. Server-side inventory city filtering remains unchanged.
+
+## Streaming dashboard runtime data
+
+DashboardLayout now renders a synchronous Suspense boundary around its async
+authentication/session check, with a nested content fallback. MonthlyReportPage
+also has its own synchronous boundary around MonthlyReportContent, placing
+connection(), session reads and uncached reporting queries below a boundary
+inside the page navigation scope. Removed the layout's blocking instant=false
+opt-out. Authentication and city/role checks remain request-time operations.
+
+Local installed Next.js documentation was checked for connection(), loading
+boundary placement and instant navigation scopes. Production build passed and
+dashboard routes now have partial-prerendered shells. Targeted ESLint passed.
+Authenticated GET checks on the running local server passed Overview, Network
+Tree, Analytics and Team Accounts. The Network Tree response contained the
+loading fallback before tree content and no blocking-prerender-dynamic message.
+Streaming improves loading feedback; database request duration is independent.
+
+## Compact overview collection charts
+
+The monthly trend uses readable month names on every tick and full month/year
+tooltips, keeping year context when multiple years are selected. Compact PKR-axis
+units replace long thousands labels. Both overview comparison bodies are 280px
+high. City comparisons now have scrollable HTML rows with complete city names,
+exact formatted amounts and proportional bars, retaining all cities and null
+amount states without an oversized chart or overlapping SVG labels.
+
+`test:chart-labels` passed month/year labels, unchanged data references, null
+values, 32 complete city rows and nine-month fit in a narrow desktop card.
+TypeScript, targeted ESLint and final production build passed. Production browser
+QA confirmed all Jan–Sep labels, aligned card bottoms, working city-list scrolling
+and readable Nawabshah (Shaheed Benazirabad) without overlap. Database records
+were not changed. Temporary GET preview and production server were stopped.
+
+## Stable chart hydration attributes
+
+The reported hydration diff used the prior 424px client sizing against the newer
+388px server sizing. A read-only DB check confirmed the same nine reporting
+months (January–September 2026). Trend density now lives in CSS; React serializes
+only height, period count and multi-year state, avoiding changing inline width
+arithmetic when spacing is adjusted. A pre-existing browser tab still needs one
+hard refresh to discard its previous client bundle.
+
+`npm run test:chart-hydration` renders SSR HTML, hydrates it with React, verifies
+identical wrapper attributes and no hydration errors/warnings, then changes to
+multi-year data. Chart label/city regression checks, TypeScript, targeted ESLint
+and production build also passed. Data values and DB records were unchanged.
+
+## Inventory collection amounts and aggregate-tree wording
+
+Reported-only tree cities now say that area names and individual box IDs were
+not supplied, instead of showing confusing zero area/registered-box labels in
+the summary and city details. Reported snapshot box counts remain visible.
+Inventory now includes a Reported collection card using the same city/year/channel
+DB period total as the tree. Source rows separately label their snapshot-month
+collection amount, keeping period sums distinct from monthly values.
+
+Read-only authenticated checks matched Badin 2026 Rs 124,259 and September's
+65 reported boxes. Faisalabad matched Rs 160,965,499 / 8,878 boxes, and Branch-only
+matched Rs 70,694,992 / 77 boxes. Missing Branch amounts remain unreported. Both
+restricted admin roles still ignored foreign-city URL parameters. Updated tree
+UI regression, TypeScript, targeted ESLint and production build passed.
 
 ## Limits
 

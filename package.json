@@ -21,7 +21,11 @@
     "test:expenses": "node scripts/test-expense-trend.mjs",
     "test:filters": "node scripts/test-dashboard-filters.mjs",
     "test:chart-labels": "node scripts/test-chart-period-labels.mjs",
-    "migrate:team-members": "node scripts/migrate-team-members.mjs"
+    "test:chart-hydration": "node scripts/test-collection-trend-hydration.mjs",
+    "migrate:team-members": "node scripts/migrate-team-members.mjs",
+    "migrate:rider-workflow": "jiti scripts/migrate-rider-workflow.mts",
+    "test:rider-cash": "jiti scripts/test-rider-cash.mts",
+    "test:rider-ui": "jiti scripts/test-rider-ui.mts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.5.0",

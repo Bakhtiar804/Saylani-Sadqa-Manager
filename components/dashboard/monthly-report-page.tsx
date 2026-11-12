@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import {Suspense} from 'react';
+import DashboardSkeleton from './dashboard-skeleton';
 import { connection } from 'next/server';
 import { redirect } from 'next/navigation';
 import { getOperationsSession } from '@/lib/operations-auth';
@@ -7,7 +9,7 @@ import { formatPKR } from '@/lib/dashboard-data';
 import PageHeading from './page-heading';
 import MetricGrid from './metric-grid';
 import ChartPanel from './chart-panel';
-import { BreakdownBarChart, CollectionTrendChart } from './charts';
+import { BreakdownBarChart, CollectionTrendChart,CityCollectionBars } from './charts';
 import RecordExplorer from './record-explorer';
 import NetworkTree from './network-tree';
 import { getNetworkTree } from '@/lib/network-tree';
@@ -20,7 +22,11 @@ export type ReportPageProps = { searchParams: Promise<MonthlyReportFilters> };
 const fieldClass = 'h-10 rounded-lg border border-[#dce8dc] bg-white px-3 text-sm text-[#203526]';
 const titles: Record<ReportView,string> = {overview:'Donation & Expense Overview',collections:'Monthly Collections',expenses:'Operational Cost',coverage:'Network Tree & Box Counts',analytics:'Collection Analytics'};
 
-export default async function MonthlyReportPage({searchParams,view='overview'}: ReportPageProps & { view?: ReportView }) {
+export default function MonthlyReportPage(props:ReportPageProps&{view?:ReportView}) {
+  return <Suspense fallback={<DashboardSkeleton/>}><MonthlyReportContent {...props}/></Suspense>;
+}
+
+async function MonthlyReportContent({searchParams,view='overview'}: ReportPageProps & { view?: ReportView }) {
   await connection();
   const session = await getOperationsSession();
   if(!session) redirect('/sign-in');
@@ -83,9 +89,9 @@ export default async function MonthlyReportPage({searchParams,view='overview'}: 
       {view==='analytics' && <ReportAnalytics data={data}/>}
       {view!=='coverage' && view!=='analytics' && <div className="mb-6 grid items-start gap-5 xl:grid-cols-2">
         <ChartPanel title={view==='expenses'?expenseTrend.title:'Reported collections by month'} description={view==='expenses'?expenseTrend.description:period}>
-          {view==='expenses'?<BreakdownBarChart data={expenseTrend.data} valueFormat="currency" height={260} periodAxis/>:<CollectionTrendChart data={data.monthly} seriesLabel="Reported collections"/>}
+          {view==='expenses'?<BreakdownBarChart data={expenseTrend.data} valueFormat="currency" height={260} periodAxis/>:<CollectionTrendChart data={data.monthly} height={280} seriesLabel="Reported collections"/>}
         </ChartPanel>
-        <ChartPanel title={view==='expenses'?'Public expenses by category':'Reported collections by city'} description="Available amounts for the selected reporting period."><BreakdownBarChart data={view==='expenses'?data.categories:data.byCity} valueFormat="currency" horizontal height={view==='expenses'?Math.max(260,Math.min(480,data.categories.length*40)):Math.max(280,Math.min(800,data.byCity.length*30))}/></ChartPanel>
+        <ChartPanel title={view==='expenses'?'Public expenses by category':'Reported collections by city'} description={view==='expenses'?'Available amounts for the selected reporting period.':`${data.byCity.length} cities · scroll to compare all reported amounts.`}>{view==='expenses'?<BreakdownBarChart data={data.categories} valueFormat="currency" horizontal height={Math.max(260,Math.min(480,data.categories.length*40))}/>:<CityCollectionBars data={data.byCity} height={280}/>}</ChartPanel>
       </div>}
       {view==='overview' && <div className="mb-6 grid gap-5 xl:grid-cols-2">
         <ChartPanel title="Collection channels" description="Selected year and city; the channel filter applies."><BreakdownBarChart data={[{name:'Public',value:data.totals.public},{name:'Branch',value:data.totals.branch}]} valueFormat="currency" height={240}/></ChartPanel>

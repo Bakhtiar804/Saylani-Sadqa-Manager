@@ -1,6 +1,5 @@
 import { BreakdownBarChart, ChartLegend, StatusDonutChart } from "@/components/dashboard/charts";
 import ChartPanel from "@/components/dashboard/chart-panel";
-import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
@@ -25,7 +24,6 @@ export default async function FinancePage() {
   const discrepancy = sum(cashHandoverDeposit, "difference_pkr");
   return <>
     <PageHeading eyebrow="Finance & reconciliation" title="Cash & Deposits" description="Follow rider handovers, reconciliation and deposit states alongside illustrative operating costs."/>
-    <DemoNotice/>
     <MetricGrid items={[
       { label: "Handover records", value: cashHandoverDeposit.length.toLocaleString("en-PK"), note: "Declared and received amounts", icon: "cash", tone: "blue" },
       { label: "Amount recorded received", value: formatPKR(received), note: "Based on handover log values", icon: "wallet", tone: "green" },

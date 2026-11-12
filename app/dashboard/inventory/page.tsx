@@ -1,6 +1,5 @@
 import { BreakdownBarChart, ChartLegend, StatusDonutChart } from "@/components/dashboard/charts";
 import ChartPanel from "@/components/dashboard/chart-panel";
-import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
@@ -26,7 +25,6 @@ export default async function DonationBoxesPage({searchParams}:{searchParams:Pro
   const needsAttention = donationBoxes.filter((box) => ["Damaged", "Under Review"].includes(String(box.box_status))).length;
   return <>
     <PageHeading eyebrow="Box management" title="Donation Boxes" description="Explore the registered box network, locations, custodians, partner links, and status changes."/>
-    <DemoNotice/>
     <ReportedBoxInventory {...reports} base="/dashboard" network/>
     <MetricGrid items={[
       { label: "Registered boxes", value: donationBoxes.length.toLocaleString("en-PK"), note: "Individual boxes with IDs and locations", icon: "box", tone: "blue" },

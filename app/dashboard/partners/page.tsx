@@ -1,6 +1,5 @@
 import { BreakdownBarChart, ChartLegend, StatusDonutChart } from "@/components/dashboard/charts";
 import ChartPanel from "@/components/dashboard/chart-panel";
-import DemoNotice from "@/components/dashboard/demo-notice";
 import MetricGrid from "@/components/dashboard/metric-grid";
 import PageHeading from "@/components/dashboard/page-heading";
 import RecordExplorer from "@/components/dashboard/record-explorer";
@@ -21,7 +20,6 @@ export default async function PartnersPage() {
   const collectionData = records.map((record) => ({ name: record.partner_name, value: record.verified_collection_pkr })).sort((a, b) => b.value - a.value);
   return <>
     <PageHeading eyebrow="Partner network" title="Partners" description="Review partner relationships and their associated recorded collection activity."/>
-    <DemoNotice/>
     <MetricGrid items={[
       { label: "Partner records", value: partners.length.toLocaleString("en-PK"), note: "All partnership statuses", icon: "handshake", tone: "blue" },
       { label: "Active partners", value: partners.filter((partner) => partner.partnership_status === "Active").length.toLocaleString("en-PK"), note: "Marked active in source records", icon: "check", tone: "green" },

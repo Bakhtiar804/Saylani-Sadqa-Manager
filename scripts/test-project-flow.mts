@@ -176,19 +176,32 @@ try {
   const taskData=await (await call('/api/dashboard/rider-assignments',201,{session:branch,method:'POST',json:{riderId:'QA-R1',boxId:'QA-NEW-BOX',taskDate:'2026-11-11',taskType:'Scheduled Collection'}})).json();
   const taskPath=`/api/dashboard/tasks/${taskData.taskId}`;
   await call('/api/dashboard/rider-assignments',403,{session:branch,method:'POST',json:{riderId:'QA-R2',boxId:'QA-BOX2',taskDate:'2026-11-11',taskType:'Scheduled Collection'}});
-  await call(`${taskPath}/collection`,404,{session:other,method:'POST',json:{amount:'100'}});
+  await call(`${taskPath}/collection`,404,{session:other,method:'POST',json:{counts:{note_100:1}}});
   await call(taskPath,409,{session:rider,method:'PATCH',json:{status:'Completed'}});
   for(const amount of ['0','-1','1.234','invalid']) await call(`${taskPath}/collection`,400,{session:rider,method:'POST',json:{amount}});
+  await call(`${taskPath}/collection`,409,{session:rider,method:'POST',json:{counts:{note_100:1}}});
+  await call(taskPath,409,{session:rider,method:'PATCH',json:{stage:'arrived'}});
+  await call(taskPath,400,{session:rider,method:'PATCH',json:{status:'Skipped'}});
   await call(taskPath,200,{session:rider,method:'PATCH',json:{status:'In Progress',notes:'Started'}});
-  const submitted=await (await call(`${taskPath}/collection`,201,{session:rider,method:'POST',json:{amount:'1234.50',notes:'Counted'}})).json();
-  await call(`${taskPath}/collection`,409,{session:rider,method:'POST',json:{amount:'1234.50'}});
-  await call('/api/dashboard/tasks/QA-VISIT/collection',409,{session:rider,method:'POST',json:{amount:'1'}});
+  await call(taskPath,409,{session:rider,method:'PATCH',json:{stage:'counting'}});
+  await call(taskPath,200,{session:rider,method:'PATCH',json:{stage:'arrived'}});
+  await call(taskPath,200,{session:rider,method:'PATCH',json:{stage:'counting'}});
+  for(const counts of [{coin_1:-1},{note_10:1.5},{note_20:'2'},{coin_3:1},{note_5000:100000000},{}]) await call(`${taskPath}/collection`,400,{session:rider,method:'POST',json:{counts}});
+  const submitted=await (await call(`${taskPath}/collection`,201,{session:rider,method:'POST',json:{counts:{note_1000:1,note_100:2,note_20:1,note_10:1,coin_2:2,coin_1:1},amount:999999,notes:'Counted'}})).json();
+  await call(`${taskPath}/collection`,409,{session:rider,method:'POST',json:{counts:{note_100:1}}});
+  await call('/api/dashboard/tasks/QA-VISIT/collection',409,{session:rider,method:'POST',json:{counts:{coin_1:1}}});
   await call('/api/dashboard/tasks/QA-VISIT',200,{session:rider,method:'PATCH',json:{status:'Completed',notes:'No cash visit'}});
   await call('/api/dashboard/tasks/QA-CANCEL',409,{session:rider,method:'PATCH',json:{status:'In Progress'}});
-  await call('/api/dashboard/tasks/QA-CANCEL/collection',409,{session:rider,method:'POST',json:{amount:'1'}});
-  await call('/api/dashboard/tasks/QA-SKIP/collection',409,{session:rider,method:'POST',json:{amount:'1'}});
+  await call('/api/dashboard/tasks/QA-CANCEL/collection',409,{session:rider,method:'POST',json:{counts:{coin_1:1}}});
+  await call('/api/dashboard/tasks/QA-SKIP/collection',409,{session:rider,method:'POST',json:{counts:{coin_1:1}}});
+  await call('/api/dashboard/tasks/QA-SKIP',409,{session:rider,method:'PATCH',json:{stage:'departed'}});
   await call('/api/dashboard/tasks/QA-SKIP',200,{session:rider,method:'PATCH',json:{status:'In Progress'}});
-  const saved=(await fixtures.query('SELECT collection_amount_pkr::text,collection_date::text FROM collections WHERE collection_id=$1',[submitted.collectionId])).rows[0];assert.equal(Number(saved.collection_amount_pkr),1234.5);
+  assert.equal((await fixtures.query("SELECT workflow_stage FROM rider_tasks WHERE task_id='QA-SKIP'")).rows[0].workflow_stage,'assigned');
+  const cashRecord=(await fixtures.query('SELECT cash_breakdown,cash_notes_pkr::float8,cash_coins_pkr::float8,rider_task_id FROM collections WHERE collection_id=$1',[submitted.collectionId])).rows[0];
+  assert.equal(cashRecord.cash_notes_pkr,1230);assert.equal(cashRecord.cash_coins_pkr,5);assert.equal(cashRecord.rider_task_id,taskData.taskId);assert.equal(cashRecord.cash_breakdown.coin_2,2);
+  const progress=(await fixtures.query('SELECT workflow_stage,workflow_events FROM rider_tasks WHERE task_id=$1',[taskData.taskId])).rows[0];assert.equal(progress.workflow_stage,'submitted');assert.deepEqual(progress.workflow_events.map((event:{stage:string})=>event.stage),['departed','arrived','counting','submitted']);
+  assert.equal((await fixtures.query('SELECT count(*)::int AS count FROM field_collection_logs WHERE task_id=$1',[taskData.taskId])).rows[0].count,1);
+  const saved=(await fixtures.query('SELECT collection_amount_pkr::text,collection_date::text FROM collections WHERE collection_id=$1',[submitted.collectionId])).rows[0];assert.equal(Number(saved.collection_amount_pkr),1235);
   const today=(await fixtures.query("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Karachi')::date::text AS day")).rows[0].day;assert.equal(saved.collection_date,today);
   const filtered=await (await call(`/api/dashboard/admin/collections?from=${today}&to=${today}&sort=rider_name&city=C002`,200,{session:cityAdmin})).json();
   assert.equal(filtered.totalRecords,1);assert.equal(filtered.records[0].collection_id,submitted.collectionId);
@@ -213,7 +226,8 @@ try {
   assert.equal(history.events.filter((event:{action:string})=>event.action==='reviewed').length,2);
   const reviewed=(await fixtures.query('SELECT notes,collection_status FROM collections WHERE collection_id=$1',[submitted.collectionId])).rows[0];
   assert.equal(reviewed.collection_status,'Verified');assert.ok(reviewed.notes.includes('\nReview [Recorded]: Recount complete'));
-  const concurrent=await Promise.all([1,2].map(()=>fetch(`${base}/api/dashboard/tasks/QA-SKIP/collection`,{method:'POST',headers:{Cookie:rider.cookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify({amount:'77'}),signal:AbortSignal.timeout(60000)})));
+  for(const stage of ['departed','arrived','counting']) await call('/api/dashboard/tasks/QA-SKIP',200,{session:rider,method:'PATCH',json:{stage}});
+  const concurrent=await Promise.all([1,2].map(()=>fetch(`${base}/api/dashboard/tasks/QA-SKIP/collection`,{method:'POST',headers:{Cookie:rider.cookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify({counts:{note_50:1,note_20:1,coin_5:1,coin_2:1}}),signal:AbortSignal.timeout(60000)})));
   assert.deepEqual(concurrent.map(response=>response.status).sort(),[201,409]);checks+=2;
   await call('/api/dashboard/boxes/QA-BOX2',404,{session:branch,method:'PATCH',json:{status:'Inactive',reason:'Foreign box'}});
   await call('/api/dashboard/boxes/QA-DAMAGED',400,{session:branch,method:'PATCH',json:{status:'Active',reason:'x'}});
@@ -224,7 +238,8 @@ try {
 
   const newRiderId=(await fixtures.query('SELECT rider_id FROM riders WHERE team_id=$1',[createdRider.account.id])).rows[0].rider_id;
   const newTask=await (await call('/api/dashboard/rider-assignments',201,{session:branch,method:'POST',json:{riderId:newRiderId,boxId:'QA-BOX1',taskDate:'2026-11-11',taskType:'Scheduled Collection'}})).json();
-  await call(`/api/dashboard/tasks/${newTask.taskId}/collection`,201,{session:newRider,method:'POST',json:{amount:'55'}});
+  for(const stage of ['departed','arrived','counting']) await call(`/api/dashboard/tasks/${newTask.taskId}`,200,{session:newRider,method:'PATCH',json:{stage}});
+  await call(`/api/dashboard/tasks/${newTask.taskId}/collection`,201,{session:newRider,method:'POST',json:{counts:{note_50:1,coin_5:1}}});
   await call('/api/team-accounts',200,{session:cityAdmin,method:'DELETE',json:{userId:createdRider.account.id,confirmedEmail:'newrider@example.invalid'}});
   await call('/api/auth/login',401,{method:'POST',json:{email:'newrider@example.invalid',password}});
   await call(`/api/dashboard/tasks/${newTask.taskId}`,401,{session:newRider,method:'PATCH',json:{status:'Skipped'}});
@@ -235,7 +250,7 @@ try {
   await call('/api/dashboard/admin/collections',401,{session:cityAdmin});
   await fixtures.query("UPDATE team_members SET role_id=2 WHERE team_id='QA-CITY'");
   await fixtures.query("UPDATE riders SET employment_status='Inactive' WHERE rider_id='QA-R1'");
-  await call('/api/dashboard/tasks/QA-SKIP/collection',404,{session:rider,method:'POST',json:{amount:'1'}});
+  await call('/api/dashboard/tasks/QA-SKIP/collection',404,{session:rider,method:'POST',json:{counts:{coin_1:1}}});
   await fixtures.query("UPDATE riders SET employment_status='Active' WHERE rider_id='QA-R1'");
   console.log('PASS soft deletion preserves history and stale city/role/inactive-rider sessions cannot write');
 

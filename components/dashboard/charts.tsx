@@ -16,6 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import type { CSSProperties } from "react";
 import type { ChartDatum } from "@/lib/dashboard-types";
 
 const palette = ["#276431", "#61bb46", "#1d65d5", "#d98a32", "#9675c7", "#86a889"];
@@ -32,7 +33,9 @@ type ChartProps = {
 };
 
 export function CollectionTrendChart({ data, height = 300, seriesLabel = 'Recorded collections' }: { data: CollectionPoint[]; height?: number; seriesLabel?: string }) {
-  return <div style={{ height }} className="w-full min-w-0"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}><defs><linearGradient id="collectionArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#61bb46" stopOpacity={0.23}/><stop offset="95%" stopColor="#61bb46" stopOpacity={0.015}/></linearGradient></defs><CartesianGrid stroke="#e9efe7" strokeDasharray="4 5" vertical={false}/><XAxis dataKey="label" tick={{ fill: "#718073", fontSize: 12 }} tickLine={false} axisLine={false} minTickGap={18}/><YAxis tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} tick={{ fill: "#718073", fontSize: 12 }} tickLine={false} axisLine={false} width={54}/><Tooltip formatter={(value) => [pkr(value), seriesLabel]} labelStyle={{ color: "#192d21", fontWeight: 700 }} contentStyle={{ border: "1px solid #dce8dc", borderRadius: 12, fontSize: 13 }}/><Area type="monotone" dataKey="collections" stroke="#276431" strokeWidth={3} fill="url(#collectionArea)" activeDot={{ r: 5, strokeWidth: 2, fill: "#fff", stroke: "#276431" }}/></AreaChart></ResponsiveContainer></div>;
+  const multipleYears=new Set(data.map(point=>point.label.slice(0,4))).size>1;
+  const monthLabel=(value:string,long=false)=>/^20\d{2}-\d{2}$/.test(value)?new Date(`${value}-01T00:00:00Z`).toLocaleDateString('en-US',{month:long?'long':'short',...(long?{year:'numeric' as const}:multipleYears?{year:'2-digit' as const}:{}),timeZone:'UTC'}):value;
+  return <div className="w-full min-w-0 overflow-x-auto"><div style={{ height, "--collection-period-count":data.length } as CSSProperties} data-multiple-years={multipleYears ? "true" : "false"} className="collection-trend-plot w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}><defs><linearGradient id="collectionArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#61bb46" stopOpacity={0.23}/><stop offset="95%" stopColor="#61bb46" stopOpacity={0.015}/></linearGradient></defs><CartesianGrid stroke="#e9efe7" strokeDasharray="4 5" vertical={false}/><XAxis dataKey="label" interval={0} tickFormatter={value=>monthLabel(String(value))} tick={{ fill: "#718073", fontSize: 12 }} tickLine={false} axisLine={false} minTickGap={18}/><YAxis tickFormatter={value=>new Intl.NumberFormat('en-PK',{notation:'compact',maximumFractionDigits:1}).format(value)} tick={{ fill: "#718073", fontSize: 12 }} tickLine={false} axisLine={false} width={54}/><Tooltip labelFormatter={value=>monthLabel(String(value),true)} formatter={(value) => [pkr(value), seriesLabel]} labelStyle={{ color: "#192d21", fontWeight: 700 }} contentStyle={{ border: "1px solid #dce8dc", borderRadius: 12, fontSize: 13 }}/><Area type="monotone" dataKey="collections" stroke="#276431" strokeWidth={3} fill="url(#collectionArea)" activeDot={{ r: 5, strokeWidth: 2, fill: "#fff", stroke: "#276431" }}/></AreaChart></ResponsiveContainer></div></div>;
 }
 
 type BreakdownBarChartProps = ChartProps & {
@@ -41,6 +44,11 @@ type BreakdownBarChartProps = ChartProps & {
   horizontal?: boolean;
   periodAxis?: boolean;
 };
+
+export function CityCollectionBars({data,height=280}:ChartProps){
+ const max=Math.max(0,...data.map(city=>Number(city.value??0)));
+ return <div style={{height}} className="overflow-y-auto overscroll-contain pr-3" role="region" aria-label="City collection comparison" tabIndex={0}><ul className="space-y-4 pb-1">{data.map((city,index)=><li key={city.name} className="min-w-0"><div className="flex items-start justify-between gap-3 text-xs leading-5"><span className="min-w-0 flex-1 break-words font-semibold text-[#536455]">{city.name}</span><b className="shrink-0 tabular-nums text-[#276431]">{city.value==null?'Not reported':pkr(city.value)}</b></div><div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#f0f5ed]"><div className="h-full rounded-full" style={{width:`${max>0?Math.max(0,Number(city.value??0))/max*100:0}%`,backgroundColor:city.color||palette[index%palette.length]}}/></div></li>)}</ul></div>;
+}
 
 export function BreakdownBarChart({ data, valueKey = "value", valueFormat = "number", height = 300, horizontal = false, periodAxis = false }: BreakdownBarChartProps) {
   const formatted = (value: unknown) => valueFormat === "currency" ? pkr(value) : Math.round(Number(value) || 0).toLocaleString("en-PK");

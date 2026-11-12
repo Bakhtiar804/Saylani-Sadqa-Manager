@@ -1,6 +1,15 @@
 @import "tailwindcss";
 @import "../styles/theme.css";
 
+.collection-trend-plot {
+  --collection-period-width: 36px;
+  min-width: calc(var(--collection-period-count) * var(--collection-period-width) + 64px);
+}
+
+.collection-trend-plot[data-multiple-years="true"] {
+  --collection-period-width: 52px;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);

@@ -126,6 +126,8 @@ CREATE TABLE IF NOT EXISTS collections (
   collection_date DATE NOT NULL,
   collection_time TIME,
   collection_amount_pkr NUMERIC(14, 2) NOT NULL,
+  cash_breakdown JSONB,
+  rider_task_id VARCHAR(20),
   collection_status VARCHAR(32) NOT NULL,
   recorded_by_team_id VARCHAR(40) NOT NULL REFERENCES team_members(team_id),
   verification_reference VARCHAR(120),
@@ -171,10 +173,15 @@ CREATE TABLE IF NOT EXISTS rider_tasks (
   task_date DATE NOT NULL,
   task_type VARCHAR(60) NOT NULL,
   task_status VARCHAR(32) NOT NULL,
+  workflow_stage VARCHAR(20) NOT NULL DEFAULT 'assigned',
+  workflow_events JSONB NOT NULL DEFAULT '[]'::jsonb,
   completion_time TIME,
   notes TEXT
 );
 CREATE INDEX IF NOT EXISTS rider_tasks_rider_date_idx ON rider_tasks (rider_id, task_date);
+ALTER TABLE collections DROP CONSTRAINT IF EXISTS collections_rider_task_id_fkey;
+ALTER TABLE collections ADD CONSTRAINT collections_rider_task_id_fkey FOREIGN KEY (rider_task_id) REFERENCES rider_tasks(task_id);
+CREATE UNIQUE INDEX IF NOT EXISTS collections_rider_task_id_unique ON collections(rider_task_id) WHERE rider_task_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS field_collection_logs (
   field_collection_id VARCHAR(20) PRIMARY KEY,

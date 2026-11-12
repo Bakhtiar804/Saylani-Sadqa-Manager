@@ -40,10 +40,17 @@ Reported counts do not imply individual box IDs or locations exist in the workbo
    create individual box IDs or inferred area names.
 2. A City/Branch Admin assigns a rider through Rider Details. Box and rider must
    belong to that admin's city. Cash tasks require an active box and rider.
-3. The rider starts an assigned task. Scheduled collections accept a positive
-   PKR amount with up to two decimal places. Non-cash visits use Complete visit.
-4. Cash submission stores the collection and completes the task in one database
-   transaction. Concurrent duplicate submissions cannot create two collections.
+3. For scheduled collections, the rider confirms departure, arrival, then starts
+   counting cash. Each step is saved with a server timestamp and shown in the
+   visit timeline. Skipping requires a reason; resuming retains saved progress.
+   Non-cash visits use Start visit / Complete visit.
+4. The rider enters whole-number quantities for each coin/note denomination,
+   checks the calculated total and confirms the count. There is no editable
+   total-amount input. The server independently calculates the total, ignoring
+   any supplied amount. One transaction saves the denomination breakdown,
+   collection, field log, completed task and audit entry. Simultaneous submissions
+   cannot create two collections for the same task. My Collections shows cash
+   count receipts. Handover/deposit remain Pending until separately recorded.
 5. A City/Branch Admin opens Collections → Individual collection register →
    Details to flag or record the entry. A flag requires a reason; recorded entries
    are locked. Each review is retained in audit history.
